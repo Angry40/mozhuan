@@ -1,0 +1,33 @@
+# 更新日志
+
+本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，提交信息遵循
+[Conventional Commits](https://www.conventionalcommits.org/zh-hans/)。
+版本号以 `package.json` 为唯一来源，`extension/manifest.json` 由发版脚本同步。
+
+## [Unreleased]
+
+## [0.1.0] - 2026-11-04
+
+### 新增
+
+- TXT 导入：自动识别 UTF-8 / GB18030（GBK）/ Big5 / UTF-16，编码可手动切换
+- EPUB 2 / EPUB 3 导入：解析 container.xml、OPF、spine、nav.xhtml / NCX，保留元数据与封面
+- 章节识别：支持「第X章」「卷」「序章 / 楔子 / 番外」与 `Chapter N` 等标题，无标准标题时按单章或长度分节
+- 章节标题美化：纯净 / 经典 / 雅致 / 现代 / 题签五种版式，支持编号格式转换、自动补号与推广语清洗
+- 排版选项：首行缩进（0–4em）与段间距（0–2em）可调，预览实时生效
+- 空章节审校：定位、补充正文、从导出中删除与一键恢复，源文件不被修改
+- 封面支持：上传 JPG / PNG / GIF 或读取剪贴板，并自动提取 EPUB 原有封面
+- 导出：EPUB 3 + NCX 双目录，含书名 / 作者 / 语言 / 封面元数据，生成后确认再下载
+- Chrome MV3 扩展打包：零 `permissions`、无远程代码，构建期校验 CSP 与清单完整性
+
+### 质量
+
+- EPUBCheck 5.4.0 校验：0 error / 0 warning
+- 118 个 Vitest 单元用例与 Playwright 端到端测试
+- 2.55MB / 1000 章场景：解析 40ms、打包 212ms
+
+### 已知限制
+
+- EPUB 内联插图统一清理，仅保留封面
+- EPUB 原 CSS 与分页结构不保留，按当前选项全量重建
+- 章节切分为启发式规则，不提供手动拖动拆分点

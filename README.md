@@ -173,6 +173,45 @@ npm run validate:epub -- samples/示例小说.epub
 
 如果解压路径不同，可用 `EPUBCHECK_JAR=/path/to/epubcheck.jar npm run validate:epub -- ...`。
 
+## 版本管理
+
+提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)，格式为 `<type>(<scope>): <subject>`：
+
+```text
+feat(export): 支持自定义封面尺寸
+fix(encoding): 修正 GB18030 边界字符解码
+docs: 补充扩展安装说明
+```
+
+`type` 取 `feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`。`Merge` 与 `Revert` 信息自动放行。
+
+钩子放在 `scripts/git-hooks/`，通过 `core.hooksPath` 生效，随仓库分发，不需要 husky 之类的依赖。首次克隆后执行一次：
+
+```bash
+git config core.hooksPath scripts/git-hooks
+```
+
+`npm install` 时 `prepare` 脚本会自动执行同一条命令。钩子做两件事：
+
+- `commit-msg`：校验提交信息格式，标题超过 100 字符直接拒绝，超过 72 字符给出提示；
+- `pre-commit`：拦截 `.DS_Store`、`node_modules`、`dist`、`release`、测试产物、`.jar` 与 `.env` 等误入暂存区的文件，并对大于 2MB 的文件给出提示（不阻断）。
+
+### 发版
+
+```bash
+npm run release -- patch       # 0.1.0 → 0.1.1
+npm run release -- minor       # 0.1.0 → 0.2.0
+npm run release -- major       # 0.1.0 → 1.0.0
+npm run release -- 1.0.0       # 指定版本
+npm run release -- minor --dry-run
+```
+
+脚本会校验工作区是否干净，按提交类型自动归类生成 `CHANGELOG.md` 段落，同步 `package.json` 与 `extension/manifest.json` 的版本号，提交 `chore(release): vX.Y.Z` 并打 `vX.Y.Z` 标签。推送时带上标签：
+
+```bash
+git push origin main --follow-tags
+```
+
 ## 输出结构
 
 ```text

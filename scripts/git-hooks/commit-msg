@@ -1,0 +1,57 @@
+#!/bin/sh
+# Conventional Commits 提交信息校验
+# 通过 core.hooksPath 指向本目录生效，随仓库分发，无需 husky。
+
+msg_file="$1"
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._-]+\))?: .+'
+
+# 取第一条非注释、非空行作为标题（git 会自动追加 # 开头的模板注释）
+header=$(sed -e '/^#/d' -e '/^[[:space:]]*$/d' "$msg_file" | head -n 1)
+
+if [ -z "$header" ]; then
+  echo "✗ 提交信息为空。格式：<type>(<scope>): <subject>" >&2
+  exit 1
+fi
+
+# 放行 git 自动生成的合并与回滚信息
+case "$header" in
+  Merge\ *|Revert\ \"*|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+if ! printf '%s' "$header" | grep -Eq "$pattern"; then
+  cat >&2 <<'EOF'
+✗ 提交信息不符合 Conventional Commits 规范。
+
+  正确格式：<type>(<scope>): <subject>
+  示例：feat(export): 支持自定义封面尺寸
+
+  可用 type：
+    feat     新功能
+    fix      缺陷修复
+    docs     仅文档变更
+    style    格式调整（不影响逻辑）
+    refactor 重构（非新增、非修复）
+    perf     性能优化
+    test     测试相关
+    build    构建系统或依赖
+    ci       持续集成配置
+    chore    杂项（版本号、脚手架等）
+    revert   回滚提交
+
+  scope 可省略；subject 用祈使句，结尾不加句号。
+EOF
+  exit 1
+fi
+
+len=$(printf '%s' "$header" | wc -m | tr -d ' ')
+
+if [ "$len" -gt 100 ]; then
+  echo "✗ 提交标题 ${len} 字符，超过 100 上限，请精简后重试。" >&2
+  exit 1
+fi
+
+if [ "$len" -gt 72 ]; then
+  echo "⚠ 提交标题 ${len} 字符，建议控制在 72 以内。" >&2
+fi
+
+exit 0
