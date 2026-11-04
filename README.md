@@ -135,6 +135,27 @@ npm run build:extension
 - 与 Web 版相比，扩展没有新增运行时能力，也没有改变隐私边界：无 `permissions`、无网络请求、无远程代码，关闭标签页即清空本次转换内容。
 - “粘贴图片”的剪贴板直读在扩展页可能被浏览器拒绝，此时仍会自动回退到 ⌘V / Ctrl+V 粘贴模式。
 
+### CRX 安装包
+
+```bash
+npm run build:crx   # 构建扩展并签名，产出 release/mozhuan-<version>.crx
+```
+
+调用本机 Chrome 的 `--pack-extension` 生成标准 CRX3 包（`Cr24` + 版本 3 + protobuf 头部 + ZIP），签名算法为 RSA-PKCS1-SHA256。想指定浏览器可设 `CHROME_PATH=/path/to/chrome`。
+
+**私钥是长期资产。** 扩展 ID 由公钥决定（`SHA256(公钥 SPKI DER)` 前 16 字节，每个 nibble 映射到 `a`–`p`），所以私钥一旦更换，扩展 ID 随之改变，已安装的副本将无法再收到更新。首次执行会在 `keys/mozhuan.pem` 生成私钥并设为 `600`，之后每次复用；该文件与 `*.pem`、`*.crx` 均已在 `.gitignore` 中，**请自行离线备份**。当前私钥对应的扩展 ID 见打包输出。
+
+需要注意的是，CRX **不是"双击即装"的分发包**：
+
+| 方式 | 结果 |
+|---|---|
+| 双击 / 拖入 `chrome://extensions` | macOS 与 Windows 上的新版 Chrome 会以 `CRX_REQUIRED_PROOF_MISSING` 拒绝，属浏览器策略，与包是否签名正确无关 |
+| 开发者模式加载 `release/extension/` 目录 | 可用，但每次加载的 ID 由路径推导，与 CRX 的 ID 不同 |
+| 企业策略 `ExtensionInstallForcelist` + 自建 `update.xml` | CRX 的标准用途：可静默部署、支持版本升级 |
+| 上传 Chrome Web Store | 用 `.zip`，不用 `.crx` |
+
+因此 CRX 的价值在于**固定扩展 ID、可控升级链路和内网分发**，而不是绕过商店做个人安装。如果只是自己用，加载解压目录即可。
+
 ## 测试
 
 ```bash
@@ -260,7 +281,10 @@ extension/
 ├── background.js              # 点击工具栏图标打开完整标签页
 └── icons/                     # 16 / 32 / 48 / 128 扩展图标
 scripts/
-└── build-extension.mjs        # dist → release/extension + 商店 zip，并做 CSP/清单校验
+├── build-extension.mjs        # dist → release/extension + 商店 zip，并做 CSP/清单校验
+├── pack-crx.mjs               # release/extension → 签名 CRX3，管理私钥与扩展 ID
+├── release.mjs                # 版本 bump、CHANGELOG 归类、提交与打标签
+└── git-hooks/                 # commit-msg 与 pre-commit 校验
 tests/
 ├── unit/                      # Vitest 单元测试
 ├── e2e/                       # Playwright 端到端测试（含扩展冒烟用例）

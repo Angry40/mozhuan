@@ -7,6 +7,11 @@ dist/
 release/
 *.tsbuildinfo
 
+# CRX 打包私钥：决定扩展 ID，丢失后无法对已安装副本发更新
+keys/
+*.pem
+*.crx
+
 # 测试产物
 test-results/
 playwright-report/

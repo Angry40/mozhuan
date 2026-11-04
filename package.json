@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "build:extension": "npm run build && node scripts/build-extension.mjs",
+    "build:crx": "npm run build:extension && node scripts/pack-crx.mjs",
     "test:extension": "npm run build:extension && playwright test tests/e2e/extension.spec.ts",
     "validate:epub": "bash scripts/validate-epub.sh",
     "release": "node scripts/release.mjs",
