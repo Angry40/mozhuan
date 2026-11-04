@@ -1,0 +1,36 @@
+{
+  "name": "mozhuan-txt-to-epub",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "墨转 · 纯前端 TXT / EPUB 小说排版与转换工具",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "build:extension": "npm run build && node scripts/build-extension.mjs",
+    "test:extension": "npm run build:extension && playwright test tests/e2e/extension.spec.ts",
+    "validate:epub": "bash scripts/validate-epub.sh"
+  },
+  "dependencies": {
+    "jszip": "^3.10.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "@xmldom/xmldom": "^0.9.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "iconv-lite": "^0.7.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}

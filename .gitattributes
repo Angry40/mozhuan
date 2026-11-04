@@ -1,0 +1,20 @@
+# 统一换行符，避免 Windows 协作时整文件 diff
+* text=auto eol=lf
+
+# 脚本必须保持 LF
+*.sh text eol=lf
+
+# 二进制资源，不做换行符转换与文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.epub binary
+*.zip binary
+*.jar binary
+*.woff binary
+*.woff2 binary
+
+# lockfile 在 diff 中折叠，减少噪音
+package-lock.json -diff linguist-generated

@@ -1,0 +1,37 @@
+# 依赖
+node_modules/
+.npm-cache/
+
+# 构建产物
+dist/
+release/
+*.tsbuildinfo
+
+# 测试产物
+test-results/
+playwright-report/
+coverage/
+.playwright-browsers/
+
+# 本地生成的验收产物
+artifacts/
+
+# EPUBCheck 需按 README 手动下载，不入库
+tools/epubcheck/
+tools/epubcheck-5.4.0/
+tools/*.jar
+
+# 编辑器与系统文件
+.DS_Store
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时遗留文件
+workspace_example.txt
