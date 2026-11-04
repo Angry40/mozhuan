@@ -73,4 +73,24 @@ describe('applyChapterOverrides', () => {
     const chapters = applyChapterOverrides(book.chapters, {}, options());
     expect(chapters).toEqual(book.chapters);
   });
+
+  it('filters hidden blank lines in edited paragraphs when enabled', () => {
+    const book = buildBook(text, options());
+    const chapters = applyChapterOverrides(
+      book.chapters,
+      { 0: { paragraphs: ['新的正文。', '\u2800', '&nbsp;', '<br>'] } },
+      options(),
+    );
+    expect(chapters[0].paragraphs).toEqual(['新的正文。']);
+  });
+
+  it('keeps hidden blank lines in edited paragraphs when disabled', () => {
+    const book = buildBook(text, options());
+    const chapters = applyChapterOverrides(
+      book.chapters,
+      { 0: { paragraphs: ['新的正文。', '\u2800', '&nbsp;'] } },
+      options({ filterBlankLines: false }),
+    );
+    expect(chapters[0].paragraphs).toEqual(['新的正文。', '\u2800', '&nbsp;']);
+  });
 });

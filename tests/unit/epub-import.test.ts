@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { buildBookFromEpub } from '../../src/core/epub/import';
 import { EpubImportError, parseEpub } from '../../src/core/epub/parsers';
-import { DEFAULT_OPTIONS, type Options } from '../../src/core/types';
+import { DEFAULT_OPTIONS, type EpubSource, type Options } from '../../src/core/types';
 
 const sampleBytes = readFileSync(new URL('../../samples/示例小说.epub', import.meta.url));
 const TINY_PNG = Uint8Array.from(
@@ -54,6 +54,61 @@ describe('parseEpub', () => {
 
   it('rejects a damaged EPUB', async () => {
     await expect(parseEpub(new ArrayBuffer(64), 'broken.epub')).rejects.toThrow(EpubImportError);
+  });
+});
+
+describe('buildBookFromEpub blank line filtering', () => {
+  /**
+   * 解析层已经清理了块文本，这里直接构造 EpubSource，锁定“过滤空行和空白行”
+   * 开关能透传到 EPUB 导入路径。
+   */
+  function makeSource(paragraphs: string[]): EpubSource {
+    return {
+      mode: 'epub',
+      fileName: 'minimal.epub',
+      buffer: new ArrayBuffer(0),
+      metadata: {
+        title: '最小样本',
+        author: '',
+        language: 'zh-CN',
+        identifier: 'urn:uuid:00000000-0000-4000-8000-000000000000',
+        modified: '2024-01-01T00:00:00Z',
+      },
+      chapters: [
+        {
+          id: 0,
+          href: 'text/chapter-0001.xhtml',
+          title: '第一章 测试',
+          paragraphs,
+          kind: 'chapter',
+          imageCount: 0,
+        },
+      ],
+      manifest: [],
+      navigation: [],
+      navigationSource: 'spine',
+      cover: null,
+      warnings: [],
+      totalChapters: 1,
+      totalCharacters: 0,
+      totalParagraphs: 0,
+    };
+  }
+
+  it('drops hidden blank lines when the filter is on', () => {
+    const book = buildBookFromEpub(
+      makeSource(['正文一。', '\u2800', '&nbsp;', '正文二。']),
+      cloneOptions(),
+    );
+    expect(book.chapters[0].paragraphs).toEqual(['正文一。', '正文二。']);
+  });
+
+  it('keeps hidden blank lines when the filter is off', () => {
+    const book = buildBookFromEpub(
+      makeSource(['正文一。', '\u2800', '&nbsp;', '正文二。']),
+      cloneOptions({ filterBlankLines: false }),
+    );
+    expect(book.chapters[0].paragraphs).toEqual(['正文一。', '\u2800', '&nbsp;', '正文二。']);
   });
 });
 

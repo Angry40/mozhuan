@@ -1,3 +1,4 @@
+import { cleanParagraphs } from './paragraphs';
 import { cleanTitleText, formatTitle, normalizeFullWidthDigits, parseHeading } from './titles';
 import type { Chapter, ChapterOverride, Options } from './types';
 
@@ -30,7 +31,12 @@ export function applyChapterOverrides(
     }
 
     if (override.paragraphs !== undefined) {
-      next = { ...next, paragraphs: override.paragraphs };
+      next = {
+        ...next,
+        paragraphs: cleanParagraphs(override.paragraphs, {
+          dropHiddenBlankLines: options.filterBlankLines,
+        }),
+      };
     }
 
     return next;

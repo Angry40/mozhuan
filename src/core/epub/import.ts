@@ -1,4 +1,5 @@
 import { computeBookStats } from '../pipeline';
+import { cleanParagraphs } from '../paragraphs';
 import { cleanTitleText, formatTitle, normalizeFullWidthDigits, parseHeading } from '../titles';
 import type {
   Chapter,
@@ -8,10 +9,6 @@ import type {
   ParseWarning,
   ParsedBook,
 } from '../types';
-
-function trimParagraph(paragraph: string): string {
-  return paragraph.replace(/^[\s\u3000]+/, '').replace(/[\s\u3000]+$/, '');
-}
 
 /**
  * Convert the raw EPUB structure into the same Chapter model used by TXT files.
@@ -42,7 +39,9 @@ export function buildBookFromEpub(source: EpubSource, options: Options): ParsedB
     }
 
     const title = formatTitle(cleanTitle, parts, options.title, assignedNumber);
-    const paragraphs = raw.paragraphs.map(trimParagraph).filter((paragraph) => paragraph.length > 0);
+    const paragraphs = cleanParagraphs(raw.paragraphs, {
+      dropHiddenBlankLines: options.filterBlankLines,
+    });
 
     const chapter: Chapter = {
       id: raw.id,

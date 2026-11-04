@@ -67,7 +67,9 @@ export function buildBook(text: string, options: Options): ParsedBook {
 
     const title = formatTitle(cleanRaw, parts, options.title, assignedNumber);
     const bodyStrip = stripImages(raw.lines.join('\n'), options.removeImages);
-    const paragraphs = buildParagraphs(bodyStrip.text);
+    const paragraphs = buildParagraphs(bodyStrip.text, {
+      dropHiddenBlankLines: options.filterBlankLines,
+    });
     const imagesRemoved = titleStrip.count + bodyStrip.count;
 
     const chapter: Chapter = {

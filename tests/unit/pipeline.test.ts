@@ -115,4 +115,34 @@ describe('buildBook', () => {
     expect(book.imageRemovals[0].chapterTitle.length).toBeGreaterThan(0);
     expect(book.imageRemovals.every((removal) => removal.snippet.length <= 80)).toBe(true);
   });
+
+  it('drops hidden blank lines by default', () => {
+    const text = `第一章 初入江湖
+
+正文一。
+
+\u2800
+
+&nbsp;
+
+正文二。`;
+    const book = buildBook(text, cloneOptions());
+    expect(book.chapters[0].paragraphs).toEqual(['正文一。', '正文二。']);
+    expect(book.stats.paragraphs).toBe(2);
+  });
+
+  it('keeps hidden blank lines when the filter is off', () => {
+    const text = `第一章 初入江湖
+
+正文一。
+
+\u2800
+
+&nbsp;
+
+正文二。`;
+    const book = buildBook(text, cloneOptions({ filterBlankLines: false }));
+    expect(book.chapters[0].paragraphs).toEqual(['正文一。', '\u2800', '&nbsp;', '正文二。']);
+    expect(book.stats.paragraphs).toBe(4);
+  });
 });

@@ -54,6 +54,11 @@ export interface ParagraphGapOptions {
 
 export interface Options {
   removeImages: boolean;
+  /**
+   * 开启时额外清理只含零宽字符、盲文空白、`&nbsp;`、`<br>` 等不可见内容的
+   * “假空行”；关闭后仍会丢弃普通空行，只是不再清理隐藏字符行。
+   */
+  filterBlankLines: boolean;
   indent: IndentOptions;
   paragraphGap: ParagraphGapOptions;
   title: TitleOptions;
@@ -187,6 +192,7 @@ export interface EpubSource {
 
 export const DEFAULT_OPTIONS: Options = {
   removeImages: true,
+  filterBlankLines: true,
   indent: { enabled: true, em: 2 },
   paragraphGap: { enabled: false, em: 0.6 },
   title: {

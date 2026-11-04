@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { buildParagraphs } from '../core/paragraphs';
 import type { Chapter } from '../core/types';
 
-function textStats(text: string): { paragraphs: number; characters: number } {
-  const paragraphs = buildParagraphs(text);
+function textStats(
+  text: string,
+  dropHiddenBlankLines: boolean,
+): { paragraphs: number; characters: number } {
+  const paragraphs = buildParagraphs(text, { dropHiddenBlankLines });
   return {
     paragraphs: paragraphs.length,
     characters: paragraphs.join('').replace(/\s/g, '').length,
@@ -14,6 +17,7 @@ export function ChapterEditor({
   chapter,
   originalParagraphs,
   hasOverride,
+  dropHiddenBlankLines,
   onSave,
   onReset,
   onClose,
@@ -21,6 +25,7 @@ export function ChapterEditor({
   chapter: Chapter;
   originalParagraphs: string[];
   hasOverride: boolean;
+  dropHiddenBlankLines: boolean;
   onSave: (payload: { title: string; paragraphs: string[] }) => void;
   onReset: () => void;
   onClose: () => void;
@@ -47,7 +52,7 @@ export function ChapterEditor({
     };
   }, [onClose]);
 
-  const stats = textStats(text);
+  const stats = textStats(text, dropHiddenBlankLines);
 
   return (
     <div
@@ -94,7 +99,7 @@ export function ChapterEditor({
         </div>
 
         <p className="chapter-editor-hint">
-          标题会套用当前标题版式；正文一行一段，空行会被忽略。保存后只影响当前预览和导出，不会修改源文件。
+          标题会套用当前标题版式；正文一行一段，空行和仅含不可见字符的空白行会按当前“过滤空行和空白行”选项处理。保存后只影响当前预览和导出，不会修改源文件。
         </p>
 
         <textarea
@@ -135,7 +140,12 @@ export function ChapterEditor({
             <button
               type="button"
               className="editor-save"
-              onClick={() => onSave({ title, paragraphs: buildParagraphs(text) })}
+              onClick={() =>
+                onSave({
+                  title,
+                  paragraphs: buildParagraphs(text, { dropHiddenBlankLines }),
+                })
+              }
               disabled={!title.trim()}
               data-testid="chapter-editor-save"
             >

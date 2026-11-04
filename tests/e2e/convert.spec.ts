@@ -426,3 +426,53 @@ test('renders on a phone-sized viewport', async ({ page }) => {
   await page.waitForTimeout(500);
   await page.screenshot({ path: 'docs/screenshot-mobile.png' });
 });
+
+test('filters hidden blank lines and applies the toggle to preview and export', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  // 「　　」是普通空行（始终丢弃），后两行是肉眼看不见的假空白行。
+  const blankText = [
+    '第一章 隐空白',
+    '',
+    '正文一。',
+    '\u3000\u3000',
+    '&nbsp;',
+    '\u2800',
+    '正文二。',
+  ].join('\n');
+
+  await page.getByTestId('file-input').setInputFiles({
+    name: '隐空白.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(blankText, 'utf8'),
+  });
+
+  await expect(page.getByTestId('chapter-count')).toHaveText('1');
+  await expect(page.getByTestId('paragraph-count')).toHaveText('2');
+
+  const frame = page.frameLocator('#preview-frame');
+  await expect(frame.locator('p.body')).toHaveCount(2);
+  await expect(frame.locator('p.body').first()).toHaveText('正文一。');
+
+  // 关闭后假空白行重新出现。
+  await page.getByTestId('toggle-blank-lines').click();
+  await expect(page.getByTestId('paragraph-count')).toHaveText('4');
+  await expect(frame.locator('p.body')).toHaveCount(4);
+
+  // 再次开启恢复。
+  await page.getByTestId('toggle-blank-lines').click();
+  await expect(page.getByTestId('paragraph-count')).toHaveText('2');
+  await expect(frame.locator('p.body')).toHaveCount(2);
+
+  const download = await exportAndDownload(page);
+  const savePath = 'artifacts/blank-lines.epub';
+  await download.saveAs(savePath);
+
+  const zip = await JSZip.loadAsync(readFileSync(savePath));
+  const chapter = (await zip.file('OEBPS/text/chapter-0001.xhtml')!.async('string')) ?? '';
+  expect(chapter).not.toContain('nbsp');
+  expect(chapter).not.toContain('\u2800');
+  expect(chapter.match(/<p class="body">/g) ?? []).toHaveLength(2);
+});

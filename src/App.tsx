@@ -220,6 +220,7 @@ export default function App() {
   }, [
     source,
     options.removeImages,
+    options.filterBlankLines,
     options.fallbackSplit,
     options.title.enabled,
     options.title.numbering,
@@ -240,6 +241,7 @@ export default function App() {
     [
       chapterOverrides,
       excludedSet,
+      options.filterBlankLines,
       options.title.cleanNoise,
       options.title.enabled,
       options.title.numbering,
@@ -685,6 +687,7 @@ export default function App() {
           chapter={editingChapter}
           originalParagraphs={editingOriginal.paragraphs}
           hasOverride={editingHasOverride}
+          dropHiddenBlankLines={options.filterBlankLines}
           onSave={handleSaveChapterEdit}
           onReset={handleResetChapterEdit}
           onClose={handleCloseEditor}

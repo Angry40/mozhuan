@@ -69,6 +69,16 @@ export function OptionsPanel({
 
       <div className="option-group">
         <Switch
+          checked={options.filterBlankLines}
+          onChange={(filterBlankLines) => patch({ filterBlankLines })}
+          label="过滤空行和空白行"
+          description="丢弃纯空行，并清理只含零宽字符、盲文空白、&nbsp; 等不可见字符的假空行；关闭后仅忽略普通空行。"
+          testId="toggle-blank-lines"
+        />
+      </div>
+
+      <div className="option-group">
+        <Switch
           checked={options.indent.enabled}
           onChange={(enabled) => patch({ indent: { ...options.indent, enabled } })}
           label="首行缩进"
