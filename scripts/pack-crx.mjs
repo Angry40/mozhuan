@@ -99,7 +99,17 @@ try {
   if (!freshKey) args.push(`--pack-extension-key=${keyPath}`);
 
   // Chrome 打包成功时不输出任何内容，直接把产物写进临时目录。
-  execFileSync(chrome, args, { stdio: 'pipe', timeout: 120_000 });
+  // 失败时会在 stderr 打出具体原因（私钥无效、清单错误等），转成一行提示。
+  try {
+    execFileSync(chrome, args, { stdio: 'pipe', timeout: 120_000 });
+  } catch (error) {
+    const stderr = error.stderr?.toString().trim() ?? '';
+    const reason = stderr.split('\n').filter(Boolean).pop() ?? error.message;
+    const hint = /invalid private key/i.test(stderr)
+      ? `私钥无效：${path.relative(root, keyPath)}。请确认它是 Chrome 生成的 PEM 私钥，或删除后重新生成（扩展 ID 会改变）。`
+      : `Chrome 打包失败：${reason}`;
+    fail(hint);
+  }
 
   const crxPath = path.join(stage, 'extension.crx');
   if (!existsSync(crxPath)) fail('Chrome 未生成 crx，可能是 Chrome 版本已移除 --pack-extension 支持。');
