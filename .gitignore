@@ -35,3 +35,6 @@ npm-debug.log*
 
 # 临时遗留文件
 workspace_example.txt
+
+# 本地助手记忆与实际工作区状态无关
+.workbuddy/
