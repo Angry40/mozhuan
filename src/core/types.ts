@@ -72,6 +72,28 @@ export interface FormattedTitle {
   toc: string;
 }
 
+export type IllustrationMimeType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/svg+xml';
+
+/**
+ * A single inline illustration kept from an imported EPUB. `key` is a content
+ * hash so the same picture referenced by several chapters is stored once.
+ */
+export interface Illustration {
+  key: string;
+  mimeType: IllustrationMimeType;
+  bytes: Uint8Array;
+  alt: string;
+}
+
+export interface ChapterIllustration {
+  illustration: Illustration;
+  /**
+   * Where the picture sits in the chapter body: `-1` means after the heading
+   * and before the first paragraph, `N` means after the Nth paragraph.
+   */
+  afterParagraph: number;
+}
+
 export interface Chapter {
   id: number;
   index: number;
@@ -80,6 +102,8 @@ export interface Chapter {
   title: FormattedTitle;
   paragraphs: string[];
   imagesRemoved: number;
+  /** Empty when the image switch removed them or the source had no pictures. */
+  illustrations: ChapterIllustration[];
 }
 
 export interface ChapterOverride {
@@ -172,6 +196,8 @@ export interface EpubChapter {
   paragraphs: string[];
   kind: EpubChapterKind;
   imageCount: number;
+  /** Pictures already decoded from the archive, in reading order. */
+  illustrations: ChapterIllustration[];
 }
 
 export interface EpubSource {

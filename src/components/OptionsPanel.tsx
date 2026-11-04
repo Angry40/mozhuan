@@ -12,14 +12,14 @@ export function OptionsPanel({
   onChange,
   removedCount,
   imageRemovals,
-  imageCleanupLocked = false,
+  keptCount = 0,
   showFallback,
 }: {
   options: Options;
   onChange: (options: Options) => void;
   removedCount: number;
   imageRemovals: ImageRemoval[];
-  imageCleanupLocked?: boolean;
+  keptCount?: number;
   showFallback: boolean;
 }) {
   const patch = (changes: Partial<Options>) => onChange({ ...options, ...changes });
@@ -39,16 +39,20 @@ export function OptionsPanel({
           onChange={(removeImages) => patch({ removeImages })}
           label="清除插图"
           description={
-            imageCleanupLocked
-              ? 'EPUB 内联插图在当前版本会统一清理，封面会单独保留。'
-              : '移除图片标签、图片链接与 [插图] 占位符；关闭只保留原文字，不联网抓图。'
+            options.removeImages
+              ? '删除图片标签、图片链接与 [插图] 占位符；EPUB 的内联插图连同图片文件一并清除。'
+              : '图片操作全部暂停：TXT 保留原始图片标记，EPUB 保留内联插图与图片文件，按原样导出。'
           }
-          disabled={imageCleanupLocked}
           testId="toggle-images"
         />
-        {removedCount > 0 ? (
+        {options.removeImages && removedCount > 0 ? (
           <p className="option-note" data-testid="removed-count">
             已从正文中移除 {removedCount} 处图片标记
+          </p>
+        ) : null}
+        {!options.removeImages && keptCount > 0 ? (
+          <p className="option-note" data-testid="kept-count">
+            已保留 {keptCount} 张插图，导出时会写入 EPUB 的 images 目录
           </p>
         ) : null}
         {options.removeImages && imageRemovals.length > 0 ? (

@@ -377,7 +377,8 @@ test('imports an existing EPUB and rebuilds it', async ({ page }) => {
   await expect(page.getByTestId('title-input')).toHaveValue('临川夜雨');
   await expect(page.getByTestId('encoding-select')).toHaveCount(0);
   await expect(page.getByTestId('cover-image')).toBeVisible();
-  await expect(page.getByTestId('toggle-images')).toBeDisabled();
+  // EPUB 输入下插图开关同样可点：关闭时保留插图与图片文件。
+  await expect(page.getByTestId('toggle-images')).toBeEnabled();
   await expect(page.frameLocator('#preview-frame').locator('.chapter-title')).toHaveText('初入江湖');
   await expect(page.getByTestId('export-button')).toBeEnabled();
   await page.waitForTimeout(500);
@@ -396,6 +397,107 @@ test('imports an existing EPUB and rebuilds it', async ({ page }) => {
   const firstChapter = (await zip.file('OEBPS/text/chapter-0001.xhtml')!.async('string')) ?? '';
   expect(firstChapter).toContain('雨下了整夜');
   expect((firstChapter.match(/class="chapter-number"/g) ?? []).length).toBe(1);
+});
+
+const E2E_TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR42mNcYq/DwMDAxMDAgKAAFOkBFcv34tUAAAAASUVORK5CYII=',
+  'base64',
+);
+
+async function makeIllustratedEpub(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+  zip.file(
+    'META-INF/container.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`,
+  );
+  zip.file(
+    'OEBPS/content.opf',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:33333333-3333-4333-8333-333333333333</dc:identifier>
+    <dc:title>带图样本</dc:title>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="c1" href="text/chapter-1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="p1" href="images/pic-a.png" media-type="image/png"/>
+  </manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>`,
+  );
+  zip.file(
+    'OEBPS/text/chapter-1.xhtml',
+    `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>第一章 起</title></head>
+<body>
+<h1>第一章 起</h1>
+<p>第一段文字。</p>
+<figure><img src="../images/pic-a.png" alt="断桥"/><figcaption>图一</figcaption></figure>
+<p>第二段文字。</p>
+</body>
+</html>`,
+  );
+  zip.file('OEBPS/images/pic-a.png', E2E_TINY_PNG);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+test('keeps or removes EPUB illustrations with the image switch', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles({
+    name: '带图样本.epub',
+    mimeType: 'application/epub+zip',
+    buffer: await makeIllustratedEpub(),
+  });
+
+  await expect(page.getByTestId('chapter-count')).toHaveText('1');
+  const frame = page.frameLocator('#preview-frame');
+
+  // 默认开：插图被清除，预览里没有任何图片。
+  await expect(page.getByTestId('toggle-images')).toBeEnabled();
+  await expect(frame.locator('figure.illustration')).toHaveCount(0);
+  await expect(page.getByTestId('image-count')).toHaveText('1');
+
+  // 关闭：插图回到正文，统计显示保留数量。
+  await page.getByTestId('toggle-images').click();
+  await expect(frame.locator('figure.illustration')).toHaveCount(1);
+  await expect(page.getByTestId('kept-count')).toContainText('已保留 1 张插图');
+  await expect(frame.locator('figure.illustration img')).toHaveAttribute(
+    'src',
+    /^data:image\/png;base64,/,
+  );
+
+  const withImages = await exportAndDownload(page);
+  await withImages.saveAs('artifacts/with-images.epub');
+  const zip = await JSZip.loadAsync(readFileSync('artifacts/with-images.epub'));
+  expect(zip.file('OEBPS/images/fig-001.png')).toBeTruthy();
+  const opf = (await zip.file('OEBPS/content.opf')!.async('string')) ?? '';
+  expect(opf).toContain('href="images/fig-001.png" media-type="image/png"');
+  const chapter = (await zip.file('OEBPS/text/chapter-0001.xhtml')!.async('string')) ?? '';
+  expect(chapter).toContain('src="../images/fig-001.png"');
+
+  // 重新打开开关：图片文件与标签一起消失。
+  await page.getByTestId('toggle-images').click();
+  await expect(frame.locator('figure.illustration')).toHaveCount(0);
+
+  const withoutImages = await exportAndDownload(page);
+  await withoutImages.saveAs('artifacts/without-images.epub');
+  const cleanZip = await JSZip.loadAsync(readFileSync('artifacts/without-images.epub'));
+  expect(
+    Object.keys(cleanZip.files).filter(
+      (name) => name.startsWith('OEBPS/images/') && !name.endsWith('/'),
+    ),
+  ).toEqual([]);
+  const cleanChapter =
+    (await cleanZip.file('OEBPS/text/chapter-0001.xhtml')!.async('string')) ?? '';
+  expect(cleanChapter).not.toContain('<img');
+  expect(cleanChapter).not.toContain('figcaption');
 });
 
 test('detects GBK files and switches chapters', async ({ page }) => {

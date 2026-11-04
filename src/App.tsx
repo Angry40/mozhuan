@@ -133,11 +133,8 @@ export default function App() {
         identifier: epub.metadata.identifier || undefined,
         modified: epub.metadata.modified || undefined,
       });
-      // Inline EPUB images are cleaned in this version. Keep the visual option
-      // consistent with what the converter actually does.
-      setOptions((previous) =>
-        previous.removeImages ? previous : { ...previous, removeImages: true },
-      );
+      // Inline images are kept or dropped according to the image switch, so the
+      // option stays editable for EPUB input as well.
       resetReview();
       setProgress(0);
       setError(null);
@@ -251,6 +248,10 @@ export default function App() {
   );
 
   const stats = useMemo(() => computeBookStats(chapters), [chapters]);
+  const keptIllustrationCount = useMemo(
+    () => chapters.reduce((sum, chapter) => sum + chapter.illustrations.length, 0),
+    [chapters],
+  );
   const emptyChapters = useMemo(
     () => chapters.filter((chapter) => chapter.paragraphs.length === 0 && chapter.kind !== 'volume'),
     [chapters],
@@ -544,7 +545,7 @@ export default function App() {
             imageRemovals={
               parsed?.imageRemovals.filter((removal) => !excludedSet.has(removal.chapterId)) ?? []
             }
-            imageCleanupLocked={source?.format === 'epub'}
+            keptCount={keptIllustrationCount}
             showFallback={showFallback}
           />
 

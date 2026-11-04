@@ -82,6 +82,7 @@ describe('buildBookFromEpub blank line filtering', () => {
           paragraphs,
           kind: 'chapter',
           imageCount: 0,
+          illustrations: [],
         },
       ],
       manifest: [],

@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
 import { coverExtension } from '../cover';
-import { renderChapterDocument, renderCss } from '../rendering';
-import type { Chapter, EpubMeta, Options } from '../types';
+import { illustrationExtension } from '../illustrations';
+import { renderChapterDocument, renderCss, type ImageResolver } from '../rendering';
+import type { Chapter, EpubMeta, Illustration, Options } from '../types';
 import {
   buildContainerXml,
   buildCoverXhtml,
@@ -10,6 +11,7 @@ import {
   buildOpf,
   type EpubChapterRef,
   type EpubCoverRef,
+  type EpubImageRef,
 } from './templates';
 
 export interface EpubBuildSettings {
@@ -79,10 +81,44 @@ export async function buildEpubBytes(
   const zip = new JSZip();
   zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
   zip.file('META-INF/container.xml', buildContainerXml());
-  zip.file('OEBPS/content.opf', buildOpf(safeMeta, identifier, modified, refs, cover));
   zip.file('OEBPS/nav.xhtml', buildNavXhtml(safeMeta, refs));
   zip.file('OEBPS/toc.ncx', buildNcx(safeMeta, identifier, refs));
   zip.file('OEBPS/css/style.css', renderCss(options));
+
+  // Collect illustrations across chapters, de-duplicated by content hash so a
+  // picture reused in several chapters is stored once.
+  const imageFiles = new Map<
+    string,
+    { id: string; href: string; mediaType: string; bytes: Uint8Array }
+  >();
+  for (const chapter of chapters) {
+    for (const item of chapter.illustrations ?? []) {
+      const { illustration } = item;
+      if (imageFiles.has(illustration.key)) continue;
+      const suffix = String(imageFiles.size + 1).padStart(3, '0');
+      imageFiles.set(illustration.key, {
+        id: `img-${suffix}`,
+        href: `images/fig-${suffix}.${illustrationExtension(illustration.mimeType)}`,
+        mediaType: illustration.mimeType,
+        bytes: illustration.bytes,
+      });
+    }
+  }
+  const imageRefs: EpubImageRef[] = [...imageFiles.values()].map(({ id, href, mediaType }) => ({
+    id,
+    href,
+    mediaType,
+  }));
+  const resolveImage: ImageResolver = (illustration: Illustration) => {
+    const file = imageFiles.get(illustration.key);
+    return file ? `../${file.href}` : '';
+  };
+
+  zip.file('OEBPS/content.opf', buildOpf(safeMeta, identifier, modified, refs, cover, imageRefs));
+
+  for (const file of imageFiles.values()) {
+    zip.file(`OEBPS/${file.href}`, file.bytes);
+  }
 
   if (cover && safeMeta.cover) {
     zip.file(`OEBPS/${cover.imageHref}`, safeMeta.cover.bytes);
@@ -96,7 +132,7 @@ export async function buildEpubBytes(
     const ref = refs[index];
     zip.file(
       `OEBPS/${ref.href}`,
-      renderChapterDocument(chapter, options, safeMeta, '../css/style.css'),
+      renderChapterDocument(chapter, options, safeMeta, '../css/style.css', resolveImage),
     );
   });
 

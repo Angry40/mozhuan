@@ -1,5 +1,8 @@
 import { escapeXml } from './epub/escape';
-import type { Chapter, EpubMeta, Options } from './types';
+import { illustrationDataUri } from './illustrations';
+import type { Chapter, ChapterIllustration, EpubMeta, Illustration, Options } from './types';
+
+export type ImageResolver = (illustration: Illustration) => string;
 
 function cssNumber(value: number, min: number, max: number): string {
   const clamped = Math.min(max, Math.max(min, value));
@@ -46,6 +49,15 @@ p.body {
 }
 p.body + p.body {
   margin-top: ${gap}em;
+}
+figure.illustration {
+  margin: 1.4em 0;
+  text-align: center;
+  text-indent: 0;
+}
+figure.illustration img {
+  max-width: 100%;
+  height: auto;
 }
 .chapter-head {
   margin: 0 0 1.7em;
@@ -151,7 +163,11 @@ function renderDivider(options: Options): string {
   return '\n    <div class="chapter-rule" aria-hidden="true"></div>';
 }
 
-export function renderChapterContent(chapter: Chapter, options: Options): string {
+export function renderChapterContent(
+  chapter: Chapter,
+  options: Options,
+  resolveImage?: ImageResolver,
+): string {
   const enabled = options.title.enabled;
   const preset = enabled ? options.title.preset : 'plain';
   const { title } = chapter;
@@ -185,9 +201,39 @@ export function renderChapterContent(chapter: Chapter, options: Options): string
   if (divider) parts.push(divider.trimStart());
   parts.push('  </header>');
 
-  for (const paragraph of chapter.paragraphs) {
+  const imagesByAnchor = new Map<number, ChapterIllustration[]>();
+  for (const item of chapter.illustrations ?? []) {
+    const list = imagesByAnchor.get(item.afterParagraph);
+    if (list) list.push(item);
+    else imagesByAnchor.set(item.afterParagraph, [item]);
+  }
+
+  const renderImagesAt = (anchor: number) => {
+    const list = imagesByAnchor.get(anchor);
+    if (!list) return;
+    for (const item of list) {
+      const src = resolveImage
+        ? resolveImage(item.illustration)
+        : illustrationDataUri(item.illustration);
+      const alt = item.illustration.alt ?? '';
+      parts.push(
+        `  <figure class="illustration"><img src="${escapeXml(src)}" alt="${escapeXml(alt)}"/></figure>`,
+      );
+    }
+  };
+
+  // Anchor -1 means the picture sits right after the heading.
+  renderImagesAt(-1);
+  chapter.paragraphs.forEach((paragraph, index) => {
     const html = escapeXml(paragraph).replace(/\n/g, '<br/>');
     parts.push(`  <p class="body">${html}</p>`);
+    renderImagesAt(index);
+  });
+
+  // Guard against anchors left dangling by a manual paragraph edit: never drop
+  // a picture just because its position no longer exists.
+  for (const anchor of imagesByAnchor.keys()) {
+    if (anchor >= chapter.paragraphs.length) renderImagesAt(anchor);
   }
 
   parts.push('</section>');
@@ -203,6 +249,7 @@ export function renderChapterDocument(
   options: Options,
   meta: EpubMeta,
   cssHref: string | null,
+  resolveImage?: ImageResolver,
 ): string {
   const css = cssHref
     ? `<link rel="stylesheet" type="text/css" href="${escapeXml(cssHref)}"/>`
@@ -218,7 +265,7 @@ export function renderChapterDocument(
   ${css}
 </head>
 <body>
-${renderChapterContent(chapter, options)}
+${renderChapterContent(chapter, options, resolveImage)}
 </body>
 </html>
 `;

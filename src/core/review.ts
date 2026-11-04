@@ -3,6 +3,19 @@ import { cleanTitleText, formatTitle, normalizeFullWidthDigits, parseHeading } f
 import type { Chapter, ChapterOverride, Options } from './types';
 
 /**
+ * Paragraph edits change the paragraph count, so an illustration anchored at
+ * paragraph N no longer means the same place. Scale the anchor proportionally
+ * instead of dropping the picture, and clamp it into range.
+ */
+function remapAnchor(anchor: number, previousCount: number, nextCount: number): number {
+  if (anchor < 0) return -1;
+  if (nextCount === 0) return -1;
+  if (previousCount <= 0) return nextCount - 1;
+  const scaled = Math.round((anchor / previousCount) * nextCount);
+  return Math.min(nextCount - 1, Math.max(0, scaled));
+}
+
+/**
  * Apply manual chapter edits on top of the generated book. Title edits are
  * re-formatted with the current title options, so changing the title preset or
  * numbering style still updates manually edited titles.
@@ -31,12 +44,16 @@ export function applyChapterOverrides(
     }
 
     if (override.paragraphs !== undefined) {
-      next = {
-        ...next,
-        paragraphs: cleanParagraphs(override.paragraphs, {
-          dropHiddenBlankLines: options.filterBlankLines,
-        }),
-      };
+      const previousCount = next.paragraphs.length;
+      const paragraphs = cleanParagraphs(override.paragraphs, {
+        dropHiddenBlankLines: options.filterBlankLines,
+      });
+      const nextCount = paragraphs.length;
+      const illustrations = (next.illustrations ?? []).map((item) => ({
+        ...item,
+        afterParagraph: remapAnchor(item.afterParagraph, previousCount, nextCount),
+      }));
+      next = { ...next, paragraphs, illustrations };
     }
 
     return next;

@@ -80,6 +80,9 @@ export function buildBook(text: string, options: Options): ParsedBook {
       title,
       paragraphs,
       imagesRemoved,
+      // A plain TXT carries no image payload: switching image cleanup off
+      // simply keeps the original markers as text.
+      illustrations: [],
     };
     chapters.push(chapter);
 

@@ -6,9 +6,16 @@ import {
   type Node as XmlNode,
 } from '@xmldom/xmldom';
 import { sniffCoverMime } from '../cover';
+import {
+  MAX_ILLUSTRATION_BYTES,
+  MAX_ILLUSTRATION_TOTAL_BYTES,
+  hashBytes,
+  sniffIllustrationMime,
+} from '../illustrations';
 import { parseHeading } from '../titles';
 import type {
   BookLanguage,
+  ChapterIllustration,
   CoverImage,
   EpubChapter,
   EpubChapterKind,
@@ -16,6 +23,8 @@ import type {
   EpubMetadata,
   EpubNavigation,
   EpubSource,
+  Illustration,
+  IllustrationMimeType,
   ParseWarning,
 } from '../types';
 
@@ -418,6 +427,40 @@ function findTitleElement(
   return { heading, header, title };
 }
 
+/**
+ * A picture reference recorded while walking the DOM. The bytes are read from
+ * the archive afterwards, because the walk itself must stay synchronous.
+ */
+interface PendingImage {
+  src: string;
+  alt: string;
+  afterParagraph: number;
+}
+
+interface ExtractState {
+  images: number;
+  buffer: string;
+  imageRefs: PendingImage[];
+}
+
+function imageSrc(element: XmlElement): string {
+  return (
+    element.getAttribute('xlink:href')?.trim() ||
+    element.getAttributeNS?.('http://www.w3.org/1999/xlink', 'href')?.trim() ||
+    element.getAttribute('href')?.trim() ||
+    element.getAttribute('src')?.trim() ||
+    ''
+  );
+}
+
+function imageAlt(element: XmlElement): string {
+  return (
+    getAttribute(element, 'alt') ||
+    getAttribute(element, 'title') ||
+    getAttribute(element, 'aria-label')
+  );
+}
+
 function countImages(element: XmlElement): number {
   return byLocalName(element, 'img').length + byLocalName(element, 'image').length;
 }
@@ -430,11 +473,28 @@ function isImageGroup(element: XmlElement): boolean {
   return Boolean(className) && IMAGE_GROUP_CLASS.test(className);
 }
 
+function collectImageRefs(
+  element: XmlElement,
+  state: ExtractState,
+  paragraphCount: number,
+  fallbackAlt: string,
+): void {
+  for (const image of [...byLocalName(element, 'img'), ...byLocalName(element, 'image')]) {
+    const src = imageSrc(image);
+    if (!src) continue;
+    state.imageRefs.push({
+      src,
+      alt: imageAlt(image) || fallbackAlt,
+      afterParagraph: paragraphCount - 1,
+    });
+  }
+}
+
 function extractParagraphs(
   node: XmlNode,
   paragraphs: string[],
   skipElements: Set<XmlElement>,
-  state: { images: number; buffer: string },
+  state: ExtractState,
 ): void {
   if (node.nodeType === 3) {
     state.buffer += node.nodeValue ?? '';
@@ -455,15 +515,29 @@ function extractParagraphs(
   };
 
   // Text living in the same container as an illustration is usually a caption
-  // or an OCR fallback for the image. Drop it together with the image.
+  // or an OCR fallback for the image. The caption is kept as a paragraph so
+  // that turning the image switch off does not lose readable content.
   if (isImageGroup(element)) {
     flush();
+    const caption = firstByLocalName(element, 'figcaption');
+    const captionText = caption ? normalizeText(readableText(caption)) : '';
     state.images += countImages(element);
+    collectImageRefs(element, state, paragraphs.length, captionText);
+    if (captionText) paragraphs.push(captionText);
     return;
   }
 
   if (name === 'img' || name === 'image') {
+    flush();
     state.images += 1;
+    const src = imageSrc(element);
+    if (src) {
+      state.imageRefs.push({
+        src,
+        alt: imageAlt(element),
+        afterParagraph: paragraphs.length - 1,
+      });
+    }
     return;
   }
   if (name === 'br') {
@@ -475,7 +549,10 @@ function extractParagraphs(
     flush();
     const text = normalizeText(readableText(element));
     if (text) paragraphs.push(text);
-    state.images += countImages(element);
+    if (countImages(element) > 0) {
+      collectImageRefs(element, state, paragraphs.length, '');
+      state.images += countImages(element);
+    }
     return;
   }
 
@@ -489,7 +566,7 @@ function extractChapter(
   document: XmlDocument,
   navTitle: string,
   fallbackTitle: string,
-): { title: string; paragraphs: string[]; images: number } {
+): { title: string; paragraphs: string[]; images: number; imageRefs: PendingImage[] } {
   const body = firstByLocalName(document, 'body') ?? document.documentElement!;
   const { header, heading } = findTitleElement(body);
   const skipElements = new Set<XmlElement>();
@@ -500,7 +577,7 @@ function extractChapter(
   }
 
   const paragraphs: string[] = [];
-  const state = { images: 0, buffer: '' };
+  const state: ExtractState = { images: 0, buffer: '', imageRefs: [] };
   extractParagraphs(body, paragraphs, skipElements, state);
   if (state.buffer.trim()) {
     const text = normalizeText(state.buffer);
@@ -510,7 +587,72 @@ function extractChapter(
   const headingTitle = heading ? normalizeText(readableText(heading)) : '';
   const documentTitle = textOf(firstByLocalName(document, 'title'));
   const title = navTitle || headingTitle || documentTitle || fallbackTitle;
-  return { title, paragraphs, images: state.images };
+  return { title, paragraphs, images: state.images, imageRefs: state.imageRefs };
+}
+
+interface IllustrationBudget {
+  byHash: Map<string, Illustration>;
+  seenPaths: Map<string, Illustration | null>;
+  totalBytes: number;
+  skipped: number;
+  skippedBytes: number;
+}
+
+/**
+ * Read the referenced pictures out of the archive and de-duplicate them by
+ * content hash. Images over the per-file or per-book budget are dropped and
+ * counted, so the caller can surface an honest warning instead of silently
+ * producing a heavier file.
+ */
+async function resolveIllustrations(
+  zip: JSZip,
+  baseFile: string,
+  refs: PendingImage[],
+  budget: IllustrationBudget,
+): Promise<ChapterIllustration[]> {
+  const result: ChapterIllustration[] = [];
+
+  for (const ref of refs) {
+    const path = resolveHref(baseFile, ref.src);
+    if (!path) continue;
+
+    let illustration = budget.seenPaths.get(path);
+    if (illustration === undefined) {
+      illustration = null;
+      const bytes = await readEntryBytes(zip, path);
+      if (bytes && bytes.length > 0) {
+        const mimeType: IllustrationMimeType | null = sniffIllustrationMime(bytes, path);
+        if (mimeType) {
+          const key = hashBytes(bytes);
+          const existing = budget.byHash.get(key);
+          if (existing) {
+            illustration = existing;
+          } else if (bytes.length > MAX_ILLUSTRATION_BYTES) {
+            budget.skipped += 1;
+            budget.skippedBytes += bytes.length;
+          } else if (budget.totalBytes + bytes.length > MAX_ILLUSTRATION_TOTAL_BYTES) {
+            budget.skipped += 1;
+            budget.skippedBytes += bytes.length;
+          } else {
+            illustration = { key, mimeType, bytes, alt: ref.alt };
+            budget.byHash.set(key, illustration);
+            budget.totalBytes += bytes.length;
+          }
+        } else {
+          budget.skipped += 1;
+        }
+      }
+      budget.seenPaths.set(path, illustration);
+    }
+
+    if (!illustration) continue;
+    result.push({
+      illustration: illustration.alt ? illustration : { ...illustration, alt: ref.alt },
+      afterParagraph: ref.afterParagraph,
+    });
+  }
+
+  return result;
 }
 
 async function extractCover(
@@ -669,6 +811,14 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
 
   const seen = new Set<string>();
   const chapters: EpubChapter[] = [];
+  const budget: IllustrationBudget = {
+    byHash: new Map(),
+    seenPaths: new Map(),
+    totalBytes: 0,
+    skipped: 0,
+    skippedBytes: 0,
+  };
+
   for (const documentItem of documents) {
     if (seen.has(documentItem.href)) continue;
     seen.add(documentItem.href);
@@ -683,7 +833,12 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
     }
 
     let document: XmlDocument;
-    let extracted: { title: string; paragraphs: string[]; images: number };
+    let extracted: {
+      title: string;
+      paragraphs: string[];
+      images: number;
+      imageRefs: PendingImage[];
+    };
     try {
       document = parseXml(content);
       const navTitle = navTitleMap.get(documentItem.href) ?? '';
@@ -707,6 +862,13 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
     }
     if (!normalizedTitle) continue;
 
+    const illustrations = await resolveIllustrations(
+      zip,
+      documentItem.href,
+      extracted.imageRefs,
+      budget,
+    );
+
     chapters.push({
       id: chapters.length,
       href: documentItem.href,
@@ -714,6 +876,7 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
       paragraphs: extracted.paragraphs,
       kind: chapterKind(normalizedTitle, 'chapter'),
       imageCount: extracted.images,
+      illustrations,
     });
   }
 
@@ -737,7 +900,14 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
   if (totalImages > 0) {
     warnings.push({
       code: 'epub-import',
-      message: `检测到 ${totalImages} 张内联插图，当前版本会统一清理；封面会单独保留。`,
+      message: `检测到 ${totalImages} 张内联插图，关闭「清除插图」可随书保留。`,
+    });
+  }
+  if (budget.skipped > 0) {
+    const size = budget.skippedBytes > 0 ? `（约 ${Math.round(budget.skippedBytes / 1024 / 1024)} MB）` : '';
+    warnings.push({
+      code: 'epub-import',
+      message: `${budget.skipped} 张插图因格式不支持或体积超出上限被跳过${size}，这些图不会出现在导出结果中。`,
     });
   }
 

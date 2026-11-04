@@ -23,6 +23,7 @@ function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
     },
     paragraphs: ['雨下了整夜。', '他笑了。'],
     imagesRemoved: 0,
+    illustrations: [],
     ...overrides,
   };
 }

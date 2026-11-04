@@ -50,16 +50,17 @@ export function buildBookFromEpub(source: EpubSource, options: Options): ParsedB
       kind: raw.kind,
       title,
       paragraphs,
-      imagesRemoved: raw.imageCount,
+      imagesRemoved: options.removeImages ? raw.imageCount : 0,
+      illustrations: options.removeImages ? [] : raw.illustrations,
     };
     chapters.push(chapter);
 
-    if (raw.imageCount > 0) {
+    if (options.removeImages && raw.imageCount > 0) {
       imageRemovals.push({
         chapterId: raw.id,
         chapterTitle: title.full || raw.title,
         kind: 'epub-inline-image',
-        snippet: `${raw.imageCount} 张内联插图（当前版本仅保留封面）`,
+        snippet: `${raw.imageCount} 张内联插图已连同图片文件清除`,
       });
     }
   }
