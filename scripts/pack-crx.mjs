@@ -117,7 +117,12 @@ try {
   }
 
   const keyPem = await readFile(keyPath, 'utf8');
-  const extensionId = extensionIdFromPem(keyPem);
+  let extensionId;
+  try {
+    extensionId = extensionIdFromPem(keyPem);
+  } catch {
+    fail(`私钥无法解析：${path.relative(root, keyPath)}。请确认它是 Chrome 生成或导出的 PEM 私钥。`);
+  }
   // 签名里必须带着这把公钥，否则产物与私钥不匹配，将来无法升级。
   if (!crxContainsKey(crx, keyPem)) fail('crx 头部找不到预期公钥，私钥与产物不匹配。');
 
