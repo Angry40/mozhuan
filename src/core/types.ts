@@ -59,6 +59,11 @@ export interface Options {
    * “假空行”；关闭后仍会丢弃普通空行，只是不再清理隐藏字符行。
    */
   filterBlankLines: boolean;
+  /**
+   * 字体精简：开启（默认）时不为导出结果嵌入字体，EPUB 源里的嵌入字体在
+   * 重建时被移除；关闭时保留 EPUB 原字体整文件随书打包。TXT 无字体，仅影响 EPUB。
+   */
+  removeFonts: boolean;
   indent: IndentOptions;
   paragraphGap: ParagraphGapOptions;
   title: TitleOptions;
@@ -92,6 +97,11 @@ export interface ChapterIllustration {
    * and before the first paragraph, `N` means after the Nth paragraph.
    */
   afterParagraph: number;
+  /**
+   * 章节头图：正文之前第一张带 logo 属性的图片，关闭「清除插图」时渲染在
+   * 章节标题之前，而不是按锚点放在正文里。
+   */
+  header?: boolean;
 }
 
 export interface Chapter {
@@ -109,6 +119,8 @@ export interface Chapter {
 export interface ChapterOverride {
   title?: string;
   paragraphs?: string[];
+  /** 编辑器给出的最终有序插图列表（锚点已按保存时段落数 clamp）。 */
+  illustrations?: ChapterIllustration[];
 }
 
 export interface ImageRemoval {
@@ -124,6 +136,17 @@ export interface BookStats {
   paragraphs: number;
   imagesRemoved: number;
   readingMinutes: number;
+}
+
+/** EPUB 可嵌入的字体格式（EPUB 3 核心媒体类型 + 常用回退格式）。 */
+export type FontMimeType = 'font/woff2' | 'font/woff' | 'font/ttf' | 'font/otf';
+
+export interface EpubFont {
+  /** 内容哈希，同一字体被多章节引用时只存一份。 */
+  key: string;
+  fileName: string;
+  mimeType: FontMimeType;
+  bytes: Uint8Array;
 }
 
 export interface ParseWarning {
@@ -143,6 +166,8 @@ export interface ParsedBook {
   stats: BookStats;
   warnings: ParseWarning[];
   imageRemovals: ImageRemoval[];
+  /** EPUB 源里提取的嵌入字体；TXT 恒为空数组。按「字体精简」开关取舍。 */
+  fonts: EpubFont[];
 }
 
 export type BookLanguage = 'zh-CN' | 'zh-TW' | 'en';
@@ -214,11 +239,14 @@ export interface EpubSource {
   totalChapters: number;
   totalCharacters: number;
   totalParagraphs: number;
+  /** 嵌入字体（按内容哈希去重），供「字体精简」开关取舍。 */
+  fonts: EpubFont[];
 }
 
 export const DEFAULT_OPTIONS: Options = {
   removeImages: true,
   filterBlankLines: true,
+  removeFonts: true,
   indent: { enabled: true, em: 2 },
   paragraphGap: { enabled: false, em: 0.6 },
   title: {

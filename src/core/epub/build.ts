@@ -1,8 +1,9 @@
 import JSZip from 'jszip';
 import { coverExtension } from '../cover';
+import { fontExtension, fontFamilyStack, renderFontFaces } from '../fonts';
 import { illustrationExtension } from '../illustrations';
 import { renderChapterDocument, renderCss, type ImageResolver } from '../rendering';
-import type { Chapter, EpubMeta, Illustration, Options } from '../types';
+import type { Chapter, EpubFont, EpubMeta, Illustration, Options } from '../types';
 import {
   buildContainerXml,
   buildCoverXhtml,
@@ -11,6 +12,7 @@ import {
   buildOpf,
   type EpubChapterRef,
   type EpubCoverRef,
+  type EpubFontRef,
   type EpubImageRef,
 } from './templates';
 
@@ -18,6 +20,8 @@ export interface EpubBuildSettings {
   identifier?: string;
   modified?: string;
   onProgress?: (percent: number) => void;
+  /** 关闭「字体精简」时随书保留的嵌入字体。 */
+  fonts?: EpubFont[];
 }
 
 interface ChapterFileRef extends EpubChapterRef {
@@ -45,6 +49,14 @@ export function chapterFileRefs(chapters: Chapter[]): ChapterFileRef[] {
       title: chapter.title.toc || `第${index + 1}章`,
     };
   });
+}
+
+/** 生成安全的字体文件名（去路径、保留扩展名、避免同名冲突）。 */
+function sanitizeFontFileName(font: EpubFont, index: number): string {
+  const base = font.fileName.split('/').pop() ?? `font-${index + 1}`;
+  const safe = base.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (safe) return safe;
+  return `font-${index + 1}.${fontExtension(font.mimeType)}`;
 }
 
 /**
@@ -83,7 +95,19 @@ export async function buildEpubBytes(
   zip.file('META-INF/container.xml', buildContainerXml());
   zip.file('OEBPS/nav.xhtml', buildNavXhtml(safeMeta, refs));
   zip.file('OEBPS/toc.ncx', buildNcx(safeMeta, identifier, refs));
-  zip.file('OEBPS/css/style.css', renderCss(options));
+
+  // 关闭「字体精简」时，把保留的嵌入字体写入 OEBPS/fonts/ 并注入 @font-face。
+  const fonts = settings.fonts ?? [];
+  const fontRefs: EpubFontRef[] = fonts.map((font, index) => ({
+    id: `font-${index + 1}`,
+    href: `fonts/${sanitizeFontFileName(font, index)}`,
+    mediaType: font.mimeType,
+  }));
+  const fontFaces = renderFontFaces(fonts, (_font, index) => `../${fontRefs[index].href}`);
+  zip.file('OEBPS/css/style.css', renderCss(options, fontFaces, fontFamilyStack(fonts)));
+  for (let index = 0; index < fonts.length; index += 1) {
+    zip.file(`OEBPS/${fontRefs[index].href}`, fonts[index].bytes);
+  }
 
   // Collect illustrations across chapters, de-duplicated by content hash so a
   // picture reused in several chapters is stored once.
@@ -114,7 +138,7 @@ export async function buildEpubBytes(
     return file ? `../${file.href}` : '';
   };
 
-  zip.file('OEBPS/content.opf', buildOpf(safeMeta, identifier, modified, refs, cover, imageRefs));
+  zip.file('OEBPS/content.opf', buildOpf(safeMeta, identifier, modified, refs, cover, imageRefs, fontRefs));
 
   for (const file of imageFiles.values()) {
     zip.file(`OEBPS/${file.href}`, file.bytes);

@@ -3,9 +3,7 @@ import type { Illustration, IllustrationMimeType } from './types';
 /** A single picture above this size is skipped to keep the tab responsive. */
 export const MAX_ILLUSTRATION_BYTES = 8 * 1024 * 1024;
 /** Total budget for all kept illustrations of one book. */
-export const MAX_ILLUSTRATION_TOTAL_BYTES = 40 * 1024 * 1024;
-
-export const ILLUSTRATION_EXTENSIONS: Record<IllustrationMimeType, string> = {
+export const MAX_ILLUSTRATION_TOTAL_BYTES = 40 * 1024 * 1024;export const ILLUSTRATION_EXTENSIONS: Record<IllustrationMimeType, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
@@ -97,4 +95,25 @@ export function toBase64(bytes: Uint8Array): string {
 /** Inline data URI, used by the live preview iframe which has no file system. */
 export function illustrationDataUri(illustration: Illustration): string {
   return `data:${illustration.mimeType};base64,${toBase64(illustration.bytes)}`;
+}
+
+/** 章节编辑器上传本地插图：校验格式与体积，生成可复用的 Illustration。 */
+export async function readIllustrationFile(file: File): Promise<Illustration> {
+  if (file.size > MAX_ILLUSTRATION_BYTES) {
+    throw new Error('插图不能超过 8MB，请压缩后再上传。');
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length === 0) {
+    throw new Error('插图文件是空的。');
+  }
+  const mimeType = sniffIllustrationMime(bytes, file.name);
+  if (!mimeType || mimeType === 'image/svg+xml') {
+    throw new Error('插图仅支持 JPG / PNG / GIF 图片。');
+  }
+  return {
+    key: hashBytes(bytes),
+    mimeType,
+    bytes,
+    alt: file.name.replace(/\.[^.]+$/, ''),
+  };
 }

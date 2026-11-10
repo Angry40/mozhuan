@@ -1,6 +1,7 @@
 import { escapeXml } from './epub/escape';
+import { fontDataUri, fontFamilyStack, renderFontFaces, type FontResolver } from './fonts';
 import { illustrationDataUri } from './illustrations';
-import type { Chapter, ChapterIllustration, EpubMeta, Illustration, Options } from './types';
+import type { Chapter, ChapterIllustration, EpubFont, EpubMeta, Illustration, Options } from './types';
 
 export type ImageResolver = (illustration: Illustration) => string;
 
@@ -9,19 +10,24 @@ function cssNumber(value: number, min: number, max: number): string {
   return String(Number(clamped.toFixed(2)));
 }
 
-export function renderCss(options: Options): string {
+export function renderCss(options: Options, fontFaces?: string, familyStack?: string[]): string {
   const indent = options.indent.enabled ? cssNumber(options.indent.em, 0, 4) : '0';
   const gap = options.paragraphGap.enabled ? cssNumber(options.paragraphGap.em, 0, 2) : '0';
 
-  return `
-html {
+  const embedStack = familyStack?.length ? familyStack : [];
+  const serifStack = [...embedStack, '"Noto Serif CJK SC"', '"Source Han Serif SC"', '"Songti SC"', 'SimSun', 'serif'];
+  const sansStack = [...embedStack, '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'];
+
+  const faces = fontFaces ? `\n${fontFaces}\n` : '';
+
+  return `${faces}html {
   -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
   padding: 0;
   color: #221b16;
-  font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-family: ${serifStack.join(', ')};
   font-size: 1em;
   line-height: 1.75;
   text-align: justify;
@@ -59,6 +65,15 @@ figure.illustration img {
   max-width: 100%;
   height: auto;
 }
+figure.illustration-header {
+  margin: 0 0 1.6em;
+  text-align: center;
+  text-indent: 0;
+}
+figure.illustration-header img {
+  max-width: 100%;
+  height: auto;
+}
 .chapter-head {
   margin: 0 0 1.7em;
   text-align: center;
@@ -66,7 +81,7 @@ figure.illustration img {
 .chapter-number {
   margin: 0 0 .65em;
   color: #9a715b;
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: ${sansStack.join(', ')};
   font-size: .82em;
   font-weight: 500;
   letter-spacing: .28em;
@@ -74,7 +89,7 @@ figure.illustration img {
 }
 .chapter-title {
   margin: 0;
-  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", SimSun, serif;
+  font-family: ${serifStack.join(', ')};
   font-size: 1.68em;
   font-weight: 600;
   line-height: 1.35;
@@ -184,6 +199,25 @@ export function renderChapterContent(
   const volumeClass = chapter.kind === 'volume' ? ' is-volume' : '';
 
   const parts: string[] = [`<section class="chapter${volumeClass}">`];
+
+  const headerImages: ChapterIllustration[] = [];
+  const bodyImages: ChapterIllustration[] = [];
+  for (const item of chapter.illustrations ?? []) {
+    if (item.header) headerImages.push(item);
+    else bodyImages.push(item);
+  }
+
+  // 章节头图（带 logo 属性、位于正文之前）渲染在章节标题之前。
+  for (const item of headerImages) {
+    const src = resolveImage
+      ? resolveImage(item.illustration)
+      : illustrationDataUri(item.illustration);
+    const alt = item.illustration.alt ?? '';
+    parts.push(
+      `  <figure class="illustration illustration-header"><img src="${escapeXml(src)}" alt="${escapeXml(alt)}"/></figure>`,
+    );
+  }
+
   parts.push(`  <header class="chapter-head preset-${preset}">`);
   if (isInline) {
     parts.push(
@@ -202,7 +236,7 @@ export function renderChapterContent(
   parts.push('  </header>');
 
   const imagesByAnchor = new Map<number, ChapterIllustration[]>();
-  for (const item of chapter.illustrations ?? []) {
+  for (const item of bodyImages) {
     const list = imagesByAnchor.get(item.afterParagraph);
     if (list) list.push(item);
     else imagesByAnchor.set(item.afterParagraph, [item]);
@@ -244,16 +278,28 @@ function langAttributes(meta: EpubMeta): string {
   return `xml:lang="${meta.language}" lang="${meta.language}"`;
 }
 
+function cssForFonts(
+  fonts: EpubFont[] | undefined,
+  srcFor: FontResolver,
+): { fontFaces: string; familyStack: string[] } {
+  if (!fonts || fonts.length === 0) return { fontFaces: '', familyStack: [] };
+  const fontFaces = renderFontFaces(fonts, srcFor);
+  return { fontFaces, familyStack: fontFamilyStack(fonts) };
+}
+
 export function renderChapterDocument(
   chapter: Chapter,
   options: Options,
   meta: EpubMeta,
   cssHref: string | null,
   resolveImage?: ImageResolver,
+  fonts?: EpubFont[],
+  fontSrcFor?: FontResolver,
 ): string {
+  const { fontFaces, familyStack } = cssForFonts(fonts, fontSrcFor ?? (() => ''));
   const css = cssHref
     ? `<link rel="stylesheet" type="text/css" href="${escapeXml(cssHref)}"/>`
-    : `<style>\n${renderCss(options)}\n</style>`;
+    : `<style>\n${renderCss(options, fontFaces, familyStack)}\n</style>`;
   const docTitle = escapeXml(chapter.title.toc || meta.title);
 
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -275,8 +321,10 @@ export function renderPreviewDocument(
   chapter: Chapter,
   options: Options,
   meta: EpubMeta,
+  fonts?: EpubFont[],
 ): string {
-  const previewCss = `${renderCss(options)}
+  const { fontFaces, familyStack } = cssForFonts(fonts, (font) => fontDataUri(font));
+  const previewCss = `${renderCss(options, fontFaces, familyStack)}
 html { background: #fffdf8; }
 body {
   max-width: 720px;

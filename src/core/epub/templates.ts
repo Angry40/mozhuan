@@ -19,6 +19,12 @@ export interface EpubImageRef {
   mediaType: string;
 }
 
+export interface EpubFontRef {
+  id: string;
+  href: string;
+  mediaType: string;
+}
+
 export function buildContainerXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -36,6 +42,7 @@ export function buildOpf(
   chapters: EpubChapterRef[],
   cover?: EpubCoverRef,
   images: EpubImageRef[] = [],
+  fonts: EpubFontRef[] = [],
 ): string {
   const chapterItems = chapters
     .map(
@@ -61,6 +68,12 @@ export function buildOpf(
         `    <item id="${escapeXml(image.id)}" href="${escapeXml(image.href)}" media-type="${escapeXml(image.mediaType)}"/>`,
     )
     .join('\n');
+  const fontItems = fonts
+    .map(
+      (font) =>
+        `    <item id="${escapeXml(font.id)}" href="${escapeXml(font.href)}" media-type="${escapeXml(font.mediaType)}"/>`,
+    )
+    .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="${meta.language}">
@@ -74,7 +87,7 @@ ${creator}${coverMeta}    <meta property="dcterms:modified">${modified}</meta>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="style" href="css/style.css" media-type="text/css"/>
-${coverItems ? `${coverItems}\n` : ''}${imageItems ? `${imageItems}\n` : ''}${chapterItems}
+${coverItems ? `${coverItems}\n` : ''}${imageItems ? `${imageItems}\n` : ''}${fontItems ? `${fontItems}\n` : ''}${chapterItems}
   </manifest>
   <spine toc="ncx">
 ${coverSpine}${spineItems}

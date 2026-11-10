@@ -126,5 +126,6 @@ export function buildBook(text: string, options: Options): ParsedBook {
     imageRemovals,
     warnings,
     stats,
+    fonts: [],
   };
 }

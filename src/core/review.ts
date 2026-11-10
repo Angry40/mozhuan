@@ -43,7 +43,11 @@ export function applyChapterOverrides(
       next = { ...next, rawTitle, title, kind };
     }
 
-    if (override.paragraphs !== undefined) {
+    if (override.illustrations !== undefined) {
+      // 编辑器给出了最终插图列表（含上传的新图、删除与重排后的锚点），直接采用。
+      next = { ...next, illustrations: override.illustrations };
+    } else if (override.paragraphs !== undefined) {
+      // 只改了正文、没动插图：按比例重映射锚点，避免插图丢失。
       const previousCount = next.paragraphs.length;
       const paragraphs = cleanParagraphs(override.paragraphs, {
         dropHiddenBlankLines: options.filterBlankLines,
@@ -51,7 +55,9 @@ export function applyChapterOverrides(
       const nextCount = paragraphs.length;
       const illustrations = (next.illustrations ?? []).map((item) => ({
         ...item,
-        afterParagraph: remapAnchor(item.afterParagraph, previousCount, nextCount),
+        afterParagraph: item.header
+          ? item.afterParagraph
+          : remapAnchor(item.afterParagraph, previousCount, nextCount),
       }));
       next = { ...next, paragraphs, illustrations };
     }

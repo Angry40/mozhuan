@@ -6,6 +6,7 @@ import {
   type Node as XmlNode,
 } from '@xmldom/xmldom';
 import { sniffCoverMime } from '../cover';
+import { fontExtension, normalizeFontMediaType, sniffFontMime } from '../fonts';
 import {
   MAX_ILLUSTRATION_BYTES,
   MAX_ILLUSTRATION_TOTAL_BYTES,
@@ -19,6 +20,7 @@ import type {
   CoverImage,
   EpubChapter,
   EpubChapterKind,
+  EpubFont,
   EpubManifestItem,
   EpubMetadata,
   EpubNavigation,
@@ -435,6 +437,7 @@ interface PendingImage {
   src: string;
   alt: string;
   afterParagraph: number;
+  header: boolean;
 }
 
 interface ExtractState {
@@ -459,6 +462,25 @@ function imageAlt(element: XmlElement): string {
     getAttribute(element, 'title') ||
     getAttribute(element, 'aria-label')
   );
+}
+
+/** 判定一张图片是否带 logo 属性（class / data-* / epub:type 中含 logo）。 */
+function hasLogoAttribute(element: XmlElement): boolean {
+  const className = getAttribute(element, 'class');
+  if (/logo/i.test(className)) return true;
+  if (
+    /logo/i.test(getAttribute(element, 'data-logo')) ||
+    /logo/i.test(getAttribute(element, 'data-role')) ||
+    /logo/i.test(getAttribute(element, 'data-type')) ||
+    /logo/i.test(getAttribute(element, 'data-attribute')) ||
+    /logo/i.test(getAttribute(element, 'data-epub-type'))
+  ) {
+    return true;
+  }
+  const epubType = element.getAttribute('epub:type');
+  if (epubType) return /logo/i.test(epubType);
+  const opsType = element.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') ?? '';
+  return /logo/i.test(opsType);
 }
 
 function countImages(element: XmlElement): number {
@@ -486,6 +508,8 @@ function collectImageRefs(
       src,
       alt: imageAlt(image) || fallbackAlt,
       afterParagraph: paragraphCount - 1,
+      // 正文开始之前（还没有任何段落）且带 logo 属性的图片，记为章节头图。
+      header: paragraphCount === 0 && hasLogoAttribute(image),
     });
   }
 }
@@ -536,6 +560,7 @@ function extractParagraphs(
         src,
         alt: imageAlt(element),
         afterParagraph: paragraphs.length - 1,
+        header: paragraphs.length === 0 && hasLogoAttribute(element),
       });
     }
     return;
@@ -578,6 +603,12 @@ function extractChapter(
 
   const paragraphs: string[] = [];
   const state: ExtractState = { images: 0, buffer: '', imageRefs: [] };
+  // 先扫描被跳过标题容器里的 logo 头图，再走正文提取（正文里的图不会被重复计数）。
+  if (header) {
+    collectHeaderImages(header, state);
+  } else if (heading) {
+    collectHeaderImages(heading, state);
+  }
   extractParagraphs(body, paragraphs, skipElements, state);
   if (state.buffer.trim()) {
     const text = normalizeText(state.buffer);
@@ -649,10 +680,34 @@ async function resolveIllustrations(
     result.push({
       illustration: illustration.alt ? illustration : { ...illustration, alt: ref.alt },
       afterParagraph: ref.afterParagraph,
+      ...(ref.header ? { header: true } : {}),
     });
   }
 
   return result;
+}
+
+/**
+ * 章节头图通常嵌在 `<header>` 或首个标题元素内部（与章节号、标题文字同容器）。
+ * 主提取流程会跳过这些标题容器以免标题文字混入正文，这里单独扫描其子树里带
+ * logo 属性的图片，记为标题之前的头图（`afterParagraph: -1`、`header: true`）。
+ */
+function collectHeaderImages(
+  element: XmlElement,
+  state: ExtractState,
+): void {
+  for (const image of [...byLocalName(element, 'img'), ...byLocalName(element, 'image')]) {
+    if (!hasLogoAttribute(image)) continue;
+    const src = imageSrc(image);
+    if (!src) continue;
+    state.imageRefs.push({
+      src,
+      alt: imageAlt(image),
+      afterParagraph: -1,
+      header: true,
+    });
+    state.images += 1;
+  }
 }
 
 async function extractCover(
@@ -729,6 +784,57 @@ async function extractCover(
   return { bytes, mimeType, fileName: baseName(imagePath) };
 }
 
+/**
+ * 从 OPF manifest 里找出字体条目并读取字节，按内容哈希去重。仅供「字体精简」
+ * 开关关闭时随书保留使用；读取失败或格式不支持的字体跳过并警告。
+ */
+async function extractFonts(
+  zip: JSZip,
+  opf: OpfData,
+  warnings: ParseWarning[],
+): Promise<EpubFont[]> {
+  const byHash = new Map<string, EpubFont>();
+  const seenPaths = new Set<string>();
+  const fonts: EpubFont[] = [];
+
+  for (const item of opf.manifest) {
+    const mediaType = normalizeFontMediaType(item.mediaType);
+    if (!mediaType) continue;
+    const path = item.href;
+    if (seenPaths.has(path)) continue;
+    seenPaths.add(path);
+
+    const bytes = await readEntryBytes(zip, path);
+    if (!bytes || bytes.length === 0) {
+      warnings.push({
+        code: 'epub-import',
+        message: `字体文件无法读取，已跳过：${baseName(path)}`,
+      });
+      continue;
+    }
+    const mimeType = sniffFontMime(bytes, mediaType);
+    if (!mimeType) {
+      warnings.push({
+        code: 'epub-import',
+        message: `字体 ${baseName(path)} 格式无法识别，已跳过。`,
+      });
+      continue;
+    }
+    const key = hashBytes(bytes);
+    if (byHash.has(key)) continue;
+    const font: EpubFont = {
+      key,
+      fileName: baseName(path) || `font-${fonts.length + 1}.${fontExtension(mimeType)}`,
+      mimeType,
+      bytes,
+    };
+    byHash.set(key, font);
+    fonts.push(font);
+  }
+
+  return fonts;
+}
+
 function chapterKind(title: string, fallback: EpubChapterKind): EpubChapterKind {
   const parts = parseHeading(title);
   if (!parts) return fallback;
@@ -771,6 +877,7 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
     navigation = { items: [], source: 'spine' };
   }
   const cover = await extractCover(zip, opf, warnings);
+  const fonts = await extractFonts(zip, opf, warnings);
   const navItemPaths = new Set(
     opf.manifest
       .filter((item) => splitProperties(item.properties).includes('nav'))
@@ -910,6 +1017,12 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
       message: `${budget.skipped} 张插图因格式不支持或体积超出上限被跳过${size}，这些图不会出现在导出结果中。`,
     });
   }
+  if (fonts.length > 0) {
+    warnings.push({
+      code: 'epub-import',
+      message: `检测到 ${fonts.length} 个嵌入字体，关闭「字体精简」可随书保留。`,
+    });
+  }
 
   const totalCharacters = chapters.reduce(
     (sum, chapter) => sum + chapter.paragraphs.join('').replace(/\s/g, '').length,
@@ -934,5 +1047,6 @@ export async function parseEpub(buffer: ArrayBuffer, fileName: string): Promise<
     totalChapters: chapters.length,
     totalCharacters,
     totalParagraphs,
+    fonts,
   };
 }

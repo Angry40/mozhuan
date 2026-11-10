@@ -39,8 +39,17 @@ const CN_UNIT_MAP: Record<string, number> = {
 
 const SIMPLE_DIGITS = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
+/**
+ * 「卷 / 册 / 部」是分卷级单元，识别为 volume（分卷目录）；「章 / 节 / 回 /
+ * 集 / 篇 / 幕」是章节级单元。这样 `第一卷 / 第一册 / 第一部` 会作为分卷单独
+ * 识别，而不是被当作普通章节。
+ */
+function isVolumeUnit(unit: string): boolean {
+  return unit === '卷' || unit === '册' || unit === '部';
+}
+
 const CHAPTER_RE = new RegExp(
-  `^(?:(?:正文|VIP|vip)\\s*[·:：\\-—]?\\s*)?第[\\s\\u3000]*([0-9]{1,7}|[${CN_DIGITS}]+)[\\s\\u3000]*([章节回集部篇幕卷])(?:[\\s\\u3000]*[:：·\\-—、,，.。]?[\\s\\u3000]*)(.*)$`,
+  `^(?:(?:正文|VIP|vip)\\s*[·:：\\-—]?\\s*)?第[\\s\\u3000]*([0-9]{1,7}|[${CN_DIGITS}]+)[\\s\\u3000]*([章节回集部篇幕卷册])(?:[\\s\\u3000]*[:：·\\-—、,，.。]?[\\s\\u3000]*)(.*)$`,
 );
 
 const SPECIAL_RE = new RegExp(
@@ -189,7 +198,7 @@ export function parseHeading(line: string): HeadingParts | null {
     const numberValue = parseNumberToken(numberText);
     return {
       raw: normalized,
-      kind: unit === '卷' ? 'volume' : 'chapter',
+      kind: isVolumeUnit(unit) ? 'volume' : 'chapter',
       marker: `第${numberText}${unit}`,
       unit,
       numberText,

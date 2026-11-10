@@ -73,5 +73,11 @@ export function buildBookFromEpub(source: EpubSource, options: Options): ParsedB
     });
   }
 
-  return { chapters, stats, warnings, imageRemovals };
+  return {
+    chapters,
+    stats,
+    warnings,
+    imageRemovals,
+    fonts: options.removeFonts ? [] : (source.fonts ?? []),
+  };
 }
