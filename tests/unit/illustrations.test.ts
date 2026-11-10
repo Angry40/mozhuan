@@ -316,6 +316,25 @@ describe('chapter header image (logo)', () => {
     const book = buildBookFromEpub(source, cloneOptions({ removeImages: true }));
     expect(book.chapters[0].illustrations).toEqual([]);
   });
+
+  it('recognises a logo class on a parent figure/div, not only on the img itself', async () => {
+    for (const wrapper of [
+      `<figure class="logo"><img src="../images/logo.png" alt="标"/></figure>`,
+      `<div class="logo"><img src="../images/logo.png" alt="标"/></div>`,
+      `<p class="chapter-head-logo"><img src="../images/logo.png" alt="标"/></p>`,
+    ]) {
+      const source = await parseEpub(
+        await makeHeaderLogoEpub(`${wrapper}<h1>第一章 起</h1><p>第一段。</p>`),
+        '头图.epub',
+      );
+      const book = buildBookFromEpub(source, cloneOptions({ removeImages: false }));
+      const html = renderChapterContent(book.chapters[0], cloneOptions({ removeImages: false }));
+      const headerIndex = html.indexOf('illustration-header');
+      const headingIndex = html.indexOf('chapter-head');
+      expect(headerIndex, wrapper).toBeGreaterThanOrEqual(0);
+      expect(headingIndex, wrapper).toBeGreaterThan(headerIndex);
+    }
+  });
 });
 
 describe('anchor remapping after a manual edit', () => {

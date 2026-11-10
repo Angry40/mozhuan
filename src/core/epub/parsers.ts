@@ -464,8 +464,8 @@ function imageAlt(element: XmlElement): string {
   );
 }
 
-/** 判定一张图片是否带 logo 属性（class / data-* / epub:type 中含 logo）。 */
-function hasLogoAttribute(element: XmlElement): boolean {
+/** 判定元素自身是否带 logo 属性（class / data-* / epub:type 中含 logo）。 */
+function elementHasLogoAttribute(element: XmlElement): boolean {
   const className = getAttribute(element, 'class');
   if (/logo/i.test(className)) return true;
   if (
@@ -481,6 +481,21 @@ function hasLogoAttribute(element: XmlElement): boolean {
   if (epubType) return /logo/i.test(epubType);
   const opsType = element.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type') ?? '';
   return /logo/i.test(opsType);
+}
+
+/**
+ * 判定一张图片是否作为「章节头图」：自身或其任一祖先元素带 logo 属性。
+ * 现实 EPUB 常把 logo class 写在 `<figure class="logo">` / `<div class="logo">`
+ * 这类父级容器上，而不是 `<img>` 本身，因此需要沿祖先链向上查找。
+ * 祖先链终点是根元素，再往上是 Document 节点（无 getAttribute），需跳过。
+ */
+function hasLogoAttribute(element: XmlElement): boolean {
+  let current: XmlNode | null = element;
+  while (current && current.nodeType === 1) {
+    if (elementHasLogoAttribute(current as XmlElement)) return true;
+    current = current.parentNode;
+  }
+  return false;
 }
 
 function countImages(element: XmlElement): number {
