@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-10
+
+### 文档
+
+- 补充许可证、在线使用与徽章说明（5d7cb9d）
+
+### 持续集成
+
+- 新增 GitHub Actions CI 与 GitHub Pages 部署工作流（9e74a89）
+
+### 杂项
+
+- **repo**：补充开源元数据（license/repository/homepage/bugs），移除 private（410cad7）
+- **license**：采用 GPL-3.0-or-later 开源许可（ab0bda6）
+
 ## [0.2.2] - 2026-11-10
 
 ### 修复

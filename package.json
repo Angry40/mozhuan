@@ -1,6 +1,6 @@
 {
   "name": "mozhuan-txt-to-epub",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "墨转 · 纯前端 TXT / EPUB 小说排版与转换工具",
   "license": "GPL-3.0-or-later",
