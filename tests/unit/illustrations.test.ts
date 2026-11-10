@@ -259,6 +259,65 @@ describe('illustration packaging', () => {
   });
 });
 
+describe('chapter header image (logo)', () => {
+  async function makeHeaderLogoEpub(bodyHtml: string): Promise<ArrayBuffer> {
+    const zip = new JSZip();
+    zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+    zip.file('META-INF/container.xml', CONTAINER_XML);
+    zip.file(
+      'OEBPS/content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:22222222-2222-4222-8222-222222222222</dc:identifier>
+    <dc:title>头图样本</dc:title>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="c1" href="text/chapter-1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="logo" href="images/logo.png" media-type="image/png"/>
+  </manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>`,
+    );
+    zip.file('OEBPS/text/chapter-1.xhtml', chapterXhtml('第一章 起', bodyHtml));
+    zip.file('OEBPS/images/logo.png', TINY_PNG);
+    return zip.generateAsync({ type: 'arraybuffer' });
+  }
+
+  it('marks the first logo image before body text as a header image', async () => {
+    const source = await parseEpub(
+      await makeHeaderLogoEpub(`<header><h1>第一章 起</h1><img class="logo" src="../images/logo.png"/></header><p>第一段。</p>`),
+      '头图.epub',
+    );
+    const headerItem = source.chapters[0].illustrations.find((item) => item.header);
+    expect(headerItem).toBeTruthy();
+    expect(headerItem!.afterParagraph).toBe(-1);
+  });
+
+  it('renders the header image before the chapter heading', async () => {
+    const source = await parseEpub(
+      await makeHeaderLogoEpub(`<header><h1>第一章 起</h1><img class="logo" src="../images/logo.png"/></header><p>第一段。</p>`),
+      '头图.epub',
+    );
+    const book = buildBookFromEpub(source, cloneOptions({ removeImages: false }));
+    const html = renderChapterContent(book.chapters[0], cloneOptions({ removeImages: false }));
+    const headerIndex = html.indexOf('illustration-header');
+    const headingIndex = html.indexOf('chapter-head');
+    expect(headerIndex).toBeGreaterThanOrEqual(0);
+    expect(headingIndex).toBeGreaterThan(headerIndex);
+  });
+
+  it('drops the header image when image removal is on', async () => {
+    const source = await parseEpub(
+      await makeHeaderLogoEpub(`<header><h1>第一章 起</h1><img class="logo" src="../images/logo.png"/></header><p>第一段。</p>`),
+      '头图.epub',
+    );
+    const book = buildBookFromEpub(source, cloneOptions({ removeImages: true }));
+    expect(book.chapters[0].illustrations).toEqual([]);
+  });
+});
+
 describe('anchor remapping after a manual edit', () => {
   function chapterWithIllustration(): Chapter {
     return {

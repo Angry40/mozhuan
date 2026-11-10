@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildBook } from '../../src/core/pipeline';
 import { applyChapterOverrides } from '../../src/core/review';
-import { DEFAULT_OPTIONS, type ChapterOverride, type Options } from '../../src/core/types';
+import {
+  DEFAULT_OPTIONS,
+  type ChapterIllustration,
+  type ChapterOverride,
+  type Options,
+} from '../../src/core/types';
 
 function options(overrides: Partial<Options> = {}): Options {
   return {
@@ -92,5 +97,50 @@ describe('applyChapterOverrides', () => {
       options({ filterBlankLines: false }),
     );
     expect(chapters[0].paragraphs).toEqual(['新的正文。', '\u2800', '&nbsp;']);
+  });
+
+  it('applies an explicit illustration override, including an empty list for removal', () => {
+    const book = buildBook(text, options());
+    const added: ChapterIllustration[] = [
+      {
+        illustration: { key: 'k1', mimeType: 'image/png', bytes: new Uint8Array([1]), alt: '新图' },
+        afterParagraph: 0,
+      },
+    ];
+    const chapters = applyChapterOverrides(
+      book.chapters,
+      { 0: { illustrations: added } },
+      options(),
+    );
+    expect(chapters[0].illustrations).toHaveLength(1);
+    expect(chapters[0].illustrations[0].afterParagraph).toBe(0);
+
+    const removed = applyChapterOverrides(
+      book.chapters,
+      { 0: { illustrations: [] } },
+      options(),
+    );
+    expect(removed[0].illustrations).toEqual([]);
+  });
+
+  it('keeps a header image anchored when paragraphs are edited without an illustration override', () => {
+    const book = buildBook(text, options());
+    const withHeader: ChapterIllustration[] = [
+      {
+        illustration: { key: 'h', mimeType: 'image/png', bytes: new Uint8Array([1]), alt: 'logo' },
+        afterParagraph: -1,
+        header: true,
+      },
+    ];
+    const sourceChapters = book.chapters.map((chapter, index) =>
+      index === 0 ? { ...chapter, illustrations: withHeader } : chapter,
+    );
+    const chapters = applyChapterOverrides(
+      sourceChapters,
+      { 0: { paragraphs: ['新的一段。'] } },
+      options(),
+    );
+    expect(chapters[0].illustrations[0].header).toBe(true);
+    expect(chapters[0].illustrations[0].afterParagraph).toBe(-1);
   });
 });

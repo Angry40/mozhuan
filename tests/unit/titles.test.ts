@@ -85,6 +85,17 @@ describe('parseHeading', () => {
     expect(parts?.unit).toBe('卷');
   });
 
+  it('detects 册 and 部 as volume-level units', () => {
+    expect(parseHeading('第一册 上篇')?.kind).toBe('volume');
+    expect(parseHeading('第一册 上篇')?.unit).toBe('册');
+    expect(parseHeading('第二部 风起')?.kind).toBe('volume');
+    expect(parseHeading('第二部 风起')?.unit).toBe('部');
+    // 章/节/回/集/篇/幕 仍是普通章节
+    expect(parseHeading('第一章 初入江湖')?.kind).toBe('chapter');
+    expect(parseHeading('第一回 登场')?.kind).toBe('chapter');
+    expect(parseHeading('第三篇 结局')?.kind).toBe('chapter');
+  });
+
   it('detects special chapters', () => {
     const parts = parseHeading('番外 小传');
     expect(parts).toMatchObject({

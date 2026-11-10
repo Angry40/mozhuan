@@ -93,6 +93,7 @@ describe('buildBookFromEpub blank line filtering', () => {
       totalChapters: 1,
       totalCharacters: 0,
       totalParagraphs: 0,
+      fonts: [],
     };
   }
 

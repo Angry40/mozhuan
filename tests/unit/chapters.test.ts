@@ -57,6 +57,27 @@ describe('splitRawChapters', () => {
     ]);
   });
 
+  it('marks 册 and 部 headings as volumes', () => {
+    const text = `第一册 上篇
+
+　　卷首语。
+
+第二部 风起
+
+　　正文。
+
+第一章 初入江湖
+
+　　正文。`;
+
+    const result = splitRawChapters(text);
+    expect(result.chapters.map((chapter) => chapter.kind)).toEqual([
+      'volume',
+      'volume',
+      'chapter',
+    ]);
+  });
+
   it('does not detect sentence-like lines as headings', () => {
     const text = `第一章的内容非常精彩，他读了一夜。
 

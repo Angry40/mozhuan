@@ -325,7 +325,8 @@ test('reviews, repairs, and removes empty chapters', async ({ page }) => {
   await page.getByTestId('edit-empty-0').click();
   await expect(page.getByTestId('chapter-editor')).toBeVisible();
   await page.screenshot({ path: 'docs/screenshot-chapter-editor.png' });
-  await page.getByTestId('chapter-editor-title').fill('第一章 重写的空章');
+  await page.getByTestId('chapter-editor-marker').fill('第一章');
+  await page.getByTestId('chapter-editor-subtitle').fill('重写的空章');
   await page
     .getByTestId('chapter-editor-textarea')
     .fill('补写的正文第一段。\n\n补写的第二段。');
@@ -498,6 +499,79 @@ test('keeps or removes EPUB illustrations with the image switch', async ({ page 
     (await cleanZip.file('OEBPS/text/chapter-0001.xhtml')!.async('string')) ?? '';
   expect(cleanChapter).not.toContain('<img');
   expect(cleanChapter).not.toContain('figcaption');
+});
+
+async function makeFontEpub(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+  zip.file(
+    'META-INF/container.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`,
+  );
+  zip.file(
+    'OEBPS/content.opf',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:44444444-4444-4444-8444-444444444444</dc:identifier>
+    <dc:title>字体样本</dc:title>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="c1" href="text/chapter-1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="f1" href="fonts/song.woff2" media-type="font/woff2"/>
+  </manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>`,
+  );
+  zip.file(
+    'OEBPS/text/chapter-1.xhtml',
+    `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章 起</title></head>
+<body><h1>第一章 起</h1><p>正文。</p></body></html>`,
+  );
+  zip.file('OEBPS/fonts/song.woff2', Buffer.from([0x77, 0x4f, 0x46, 0x32, 0x00, 0x00, 0x00, 0x01]));
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+test('keeps or removes embedded fonts with the font switch', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles({
+    name: '字体样本.epub',
+    mimeType: 'application/epub+zip',
+    buffer: await makeFontEpub(),
+  });
+
+  await expect(page.getByTestId('chapter-count')).toHaveText('1');
+  // 默认开（精简）：显示移除提示。
+  await expect(page.getByTestId('fonts-removed-count')).toContainText('已精简（不嵌入）1 个字体文件');
+
+  const withoutFonts = await exportAndDownload(page);
+  await withoutFonts.saveAs('artifacts/without-fonts.epub');
+  let zip = await JSZip.loadAsync(readFileSync('artifacts/without-fonts.epub'));
+  expect(
+    Object.keys(zip.files).filter((name) => name.startsWith('OEBPS/fonts/') && !name.endsWith('/')),
+  ).toEqual([]);
+  let css = (await zip.file('OEBPS/css/style.css')!.async('string')) ?? '';
+  expect(css).not.toContain('@font-face');
+
+  // 关闭：保留字体文件。
+  await page.getByTestId('toggle-fonts').click();
+  await expect(page.getByTestId('fonts-kept-count')).toContainText('将保留 1 个字体文件');
+
+  const withFonts = await exportAndDownload(page);
+  await withFonts.saveAs('artifacts/with-fonts.epub');
+  zip = await JSZip.loadAsync(readFileSync('artifacts/with-fonts.epub'));
+  expect(
+    Object.keys(zip.files).filter((name) => name.startsWith('OEBPS/fonts/') && !name.endsWith('/')),
+  ).toHaveLength(1);
+  const opf = (await zip.file('OEBPS/content.opf')!.async('string')) ?? '';
+  expect(opf).toContain('media-type="font/woff2"');
+  css = (await zip.file('OEBPS/css/style.css')!.async('string')) ?? '';
+  expect(css).toContain('@font-face');
 });
 
 test('detects GBK files and switches chapters', async ({ page }) => {
