@@ -13,6 +13,8 @@ export function OptionsPanel({
   removedCount,
   imageRemovals,
   keptCount = 0,
+  fontCount = 0,
+  isEpub = false,
   showFallback,
 }: {
   options: Options;
@@ -20,6 +22,8 @@ export function OptionsPanel({
   removedCount: number;
   imageRemovals: ImageRemoval[];
   keptCount?: number;
+  fontCount?: number;
+  isEpub?: boolean;
   showFallback: boolean;
 }) {
   const patch = (changes: Partial<Options>) => onChange({ ...options, ...changes });
@@ -79,6 +83,30 @@ export function OptionsPanel({
           description="丢弃纯空行，并清理只含零宽字符、盲文空白、&nbsp; 等不可见字符的假空行；关闭后仅忽略普通空行。"
           testId="toggle-blank-lines"
         />
+      </div>
+
+      <div className="option-group">
+        <Switch
+          checked={options.removeFonts}
+          onChange={(removeFonts) => patch({ removeFonts })}
+          label="字体清理"
+          description={
+            options.removeFonts
+              ? '精简字体：重建 EPUB 时不嵌入字体，源文件里的嵌入字体被移除（文件更小）。'
+              : '保留 EPUB 原有字体文件，按原样写入导出包。仅 EPUB 输入生效。'
+          }
+          testId="toggle-fonts"
+        />
+        {options.removeFonts && isEpub && fontCount > 0 ? (
+          <p className="option-note" data-testid="fonts-removed-count">
+            已精简（不嵌入）{fontCount} 个字体文件
+          </p>
+        ) : null}
+        {!options.removeFonts && fontCount > 0 ? (
+          <p className="option-note" data-testid="fonts-kept-count">
+            将保留 {fontCount} 个字体文件，写入 EPUB 的 fonts 目录
+          </p>
+        ) : null}
       </div>
 
       <div className="option-group">

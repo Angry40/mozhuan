@@ -2032,6 +2032,114 @@ body.modal-open {
   outline: 2px solid rgba(164, 63, 44, 0.16);
 }
 
+.chapter-editor-illustrations {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #fbf7f0;
+}
+
+.chapter-editor-illustrations-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.editor-add-image {
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: #fffdf9;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chapter-editor-illustration-error {
+  margin: 8px 0 0;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.chapter-editor-illustrations-empty {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chapter-editor-illustration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chapter-editor-illustration-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chapter-editor-illustration-thumb {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.chapter-editor-illustration-info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chapter-editor-illustration-alt {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-editor-illustration-info select {
+  width: 100%;
+  max-width: 220px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf9;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.editor-remove-image {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fffdf9;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-remove-image:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .editor-save:disabled {
   opacity: 0.45;
   cursor: not-allowed;

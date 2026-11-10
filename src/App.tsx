@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChapterEditor } from './components/ChapterEditor';
+import { ChapterEditor, sameIllustrations } from './components/ChapterEditor';
 import { ChapterList } from './components/ChapterList';
 import { EmptyChapterNotice } from './components/EmptyChapterNotice';
 import { EpubInfoPanel } from './components/EpubInfoPanel';
@@ -20,6 +20,7 @@ import { applyChapterOverrides } from './core/review';
 import {
   DEFAULT_OPTIONS,
   type Chapter,
+  type ChapterIllustration,
   type ChapterOverride,
   type EpubMeta,
   type EpubSource,
@@ -217,6 +218,7 @@ export default function App() {
   }, [
     source,
     options.removeImages,
+    options.removeFonts,
     options.filterBlankLines,
     options.fallbackSplit,
     options.title.enabled,
@@ -281,8 +283,11 @@ export default function App() {
   }, [chapters, editingChapterId]);
 
   const previewHtml = useMemo(
-    () => (selectedChapter ? renderPreviewDocument(selectedChapter, options, meta) : ''),
-    [selectedChapter, options, meta],
+    () =>
+      selectedChapter
+        ? renderPreviewDocument(selectedChapter, options, meta, parsed?.fonts)
+        : '',
+    [selectedChapter, options, meta, parsed?.fonts],
   );
 
   const warnings = useMemo<ParseWarning[]>(() => {
@@ -384,7 +389,11 @@ export default function App() {
   }, []);
 
   const handleSaveChapterEdit = useCallback(
-    (payload: { title: string; paragraphs: string[] }) => {
+    (payload: {
+      title: string;
+      paragraphs: string[];
+      illustrations: ChapterIllustration[];
+    }) => {
       if (editingChapterId === null) return;
       const original = sourceChapters.find((chapter) => chapter.id === editingChapterId);
       const next: ChapterOverride = { ...(chapterOverrides[editingChapterId] ?? {}) };
@@ -402,9 +411,19 @@ export default function App() {
         next.paragraphs = payload.paragraphs;
       }
 
+      if (original && sameIllustrations(original.illustrations ?? [], payload.illustrations)) {
+        delete next.illustrations;
+      } else {
+        next.illustrations = payload.illustrations;
+      }
+
       setChapterOverrides((previous) => {
         const updated = { ...previous };
-        if (next.title === undefined && next.paragraphs === undefined) {
+        if (
+          next.title === undefined &&
+          next.paragraphs === undefined &&
+          next.illustrations === undefined
+        ) {
           delete updated[editingChapterId];
         } else {
           updated[editingChapterId] = next;
@@ -448,6 +467,7 @@ export default function App() {
       };
       const bytes = await buildEpubBytes(chapters, effectiveMeta, options, {
         onProgress: (value) => setProgress(value),
+        fonts: parsed?.fonts ?? [],
       });
       setProgress(100);
       if (epoch !== inputEpochRef.current) {
@@ -468,7 +488,7 @@ export default function App() {
     } finally {
       setExporting(false);
     }
-  }, [chapters, excludedChapterIds.length, meta, options, source, stats.characters]);
+  }, [chapters, excludedChapterIds.length, meta, options, source, stats.characters, parsed?.fonts]);
 
   const handleDownload = useCallback(() => {
     if (!exportResult) return;
@@ -546,6 +566,8 @@ export default function App() {
               parsed?.imageRemovals.filter((removal) => !excludedSet.has(removal.chapterId)) ?? []
             }
             keptCount={keptIllustrationCount}
+            fontCount={source?.format === 'epub' ? source.epub.fonts.length : 0}
+            isEpub={source?.format === 'epub'}
             showFallback={showFallback}
           />
 
