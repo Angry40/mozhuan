@@ -1,6 +1,11 @@
 # 墨转 · TXT / EPUB 小说转 EPUB
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![CI](https://github.com/Angry40/mozhuan/actions/workflows/ci.yml/badge.svg)](https://github.com/Angry40/mozhuan/actions/workflows/ci.yml)
+
 一个**纯前端、零上传**的单页工具：把 TXT 或现有 EPUB 拖进浏览器，解析章节，调整排版，实时预览，然后重新导出带目录的 EPUB 3。
+
+> 在线使用：<https://Angry40.github.io/mozhuan/>
 
 ![墨转界面](docs/screenshot.png)
 
@@ -325,3 +330,14 @@ docs/                          # 界面截图
 ## 隐私
 
 整个转换流程在本地浏览器内完成：TXT / EPUB 都通过 `File.arrayBuffer()` 读取，EPUB 由 JSZip 解包和重新打包，不发送到任何服务器。运行时没有分析脚本、远程字体或图片请求。
+
+## 许可证
+
+本项目采用 [GNU General Public License v3.0（或更高版本）](https://www.gnu.org/licenses/gpl-3.0)（GPL-3.0-or-later）。
+
+这是一个 **copyleft** 许可：你可以自由使用、修改与分发，但**当你分发本软件或其修改版本时，必须同样以 GPL 协议开源**，并保留版权声明与无担保声明。完整的许可文本见 [LICENSE](LICENSE)。
+
+- 源码仓库：<https://github.com/Angry40/mozhuan>
+- 问题反馈：<https://github.com/Angry40/mozhuan/issues>
+- 在线使用：<https://Angry40.github.io/mozhuan/>
+
