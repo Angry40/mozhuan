@@ -1,9 +1,17 @@
 {
   "name": "mozhuan-txt-to-epub",
-  "private": true,
   "version": "0.2.2",
   "type": "module",
   "description": "墨转 · 纯前端 TXT / EPUB 小说排版与转换工具",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Angry40/mozhuan.git"
+  },
+  "homepage": "https://Angry40.github.io/mozhuan/",
+  "bugs": {
+    "url": "https://github.com/Angry40/mozhuan/issues"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
