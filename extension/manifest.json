@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "墨转 · TXT / EPUB 转 EPUB",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "在浏览器本地把 TXT / EPUB 小说重新排版并导出带目录的 EPUB 3，支持章节识别、标题美化、封面与实时预览，全程零上传。",
   "action": {
     "default_title": "打开墨转",
