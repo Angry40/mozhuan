@@ -71,6 +71,18 @@ describe('renderCss', () => {
     expect(css).toContain('text-indent: 4em');
     expect(css).toContain('margin-top: 2em');
   });
+
+  it('keeps the title font (Songti-first) distinct from the body font (Noto-first)', () => {
+    const css = renderCss(makeOptions());
+    // 标题宋体优先（否则标题美化看起来失效）
+    expect(css).toContain(
+      'font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", SimSun, serif;',
+    );
+    // 正文 Noto 优先
+    expect(css).toContain(
+      'font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", SimSun, serif;',
+    );
+  });
 });
 
 describe('renderChapterContent', () => {

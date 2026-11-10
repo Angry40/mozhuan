@@ -15,7 +15,10 @@ export function renderCss(options: Options, fontFaces?: string, familyStack?: st
   const gap = options.paragraphGap.enabled ? cssNumber(options.paragraphGap.em, 0, 2) : '0';
 
   const embedStack = familyStack?.length ? familyStack : [];
-  const serifStack = [...embedStack, '"Noto Serif CJK SC"', '"Source Han Serif SC"', '"Songti SC"', 'SimSun', 'serif'];
+  // 正文：Noto Serif 优先；标题：宋体（Songti SC）优先，与旧版保持一致，
+  // 否则标题美化会因字体与正文同化而看起来“失效”。
+  const bodySerifStack = [...embedStack, '"Noto Serif CJK SC"', '"Source Han Serif SC"', '"Songti SC"', 'SimSun', 'serif'];
+  const titleSerifStack = [...embedStack, '"Songti SC"', '"Noto Serif CJK SC"', '"Source Han Serif SC"', 'SimSun', 'serif'];
   const sansStack = [...embedStack, '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'];
 
   const faces = fontFaces ? `\n${fontFaces}\n` : '';
@@ -27,7 +30,7 @@ body {
   margin: 0;
   padding: 0;
   color: #221b16;
-  font-family: ${serifStack.join(', ')};
+  font-family: ${bodySerifStack.join(', ')};
   font-size: 1em;
   line-height: 1.75;
   text-align: justify;
@@ -89,7 +92,7 @@ figure.illustration-header img {
 }
 .chapter-title {
   margin: 0;
-  font-family: ${serifStack.join(', ')};
+  font-family: ${titleSerifStack.join(', ')};
   font-size: 1.68em;
   font-weight: 600;
   line-height: 1.35;
